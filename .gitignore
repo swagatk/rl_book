@@ -1,0 +1,27 @@
+# ignore the following directories
+
+__pycache__/
+**/logs/
+*.h5
+*.swp
+*.swo
+*.dat
+*.txt
+#!requirements.txt
+chkpt/ 
+reload/
+results/
+**/result 
+**/.idea
+**/.ipynb_checkpoints
+**/wandb/
+wandb/
+.idea/
+.ipynb_checkpoints/
+**/tb_log
+*.log
+**/log/
+*.env
+**/checkpoints 
+*.zip
+*.csv
