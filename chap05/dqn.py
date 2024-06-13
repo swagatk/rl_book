@@ -4,6 +4,7 @@ import tensorflow as tf
 import keras
 from keras.optimizers import Adam
 from buffer import ReplayBuffer, STBuffer
+import os
 
 class DQNAgent:
     def __init__(self, obs_shape: tuple, n_actions: int,
@@ -223,4 +224,169 @@ class DQNPERAgent(DQNAgent):
         self.update_epsilon()
 
 ###################
-#   
+# DQN for Atari Environments  
+##################
+
+import imageio
+from PIL import Image
+import PIL.ImageDraw as ImageDraw
+import matplotlib.pyplot as plt 
+import cv2 
+import sys 
+
+def _label_with_episode_number(frame, episode_num, step_num):
+    im = Image.fromarray(frame)
+    drawer = ImageDraw.Draw(im)
+    if np.mean(im) < 128: # for dark image
+        text_color = (255, 255, 255)
+    else:
+        text_color = (0, 0, 0)
+    drawer.text((im.size[0]/20, im.size[1]/18),
+                f'Episode: {episode_num+1}, Steps: {step_num+1}',
+                fill=text_color)
+    return im
+
+class DQNAtariAgent(DQNPERAgent):
+    def __init__(self, obs_shape: tuple, n_actions: int,
+                        buffer_size=2000, batch_size=24,
+                        ddqn_flag=True, model=None, per_flag=True):
+        self.per_flag = per_flag
+        
+        if self.per_flag:
+            super().__init__(obs_shape, n_actions, buffer_size,
+                        batch_size, ddqn_flag, model)
+        else:
+            DQNAgent.__init__(self, obs_shape, n_actions, buffer_size, 
+                              batch_size, ddqn_flag, model)
+        
+    def experience_replay(self):
+        if self.per_flag:
+            super().experience_replay()
+        else:
+            DQNAgent.experience_replay(self)
+
+    def preprocess(self, observation, x_crop=(1, 172), y_crop=None):
+        assert len(self.obs_shape) == 3, "Observation must have 3 dimension (H, W, C)"
+        output_shape = self.obs_shape[:-1] # all but last (H, W)
+        # crop image
+        if x_crop is not None and y_crop is not None:
+            xlow, xhigh = x_crop
+            ylow, yhigh = y_crop
+            observation = observation[xlow:xhigh, ylow:yhigh]
+        elif x_crop is not None and y_crop is None:
+            xlow, xhigh = x_crop
+            observation = observation[xlow:xhigh, :]
+        elif x_crop is None and y_crop is not None:
+                ylow, yhigh = y_crop
+                observation = observation[:, ylow:yhigh]
+        else:
+            observation = observation
+            
+        # resize image
+        observation = cv2.resize(observation, output_shape)
+        
+        # normalize image
+        observation = observation / 255.  # normalize between 0 & 1
+        return observation
+            
+    def train(self, env, max_episodes=300, 
+          train_freq=1, copy_freq=1, filename=None, wtfile_prefix=None):
+    
+        if filename is not None:
+            file = open(filename, 'w')
+            
+        if wtfile_prefix is not None:
+            wt_filename = wtfile_prefix + '_best_model.weights.h5'
+        else:
+            wt_filename = 'best_model.weights.h5'
+
+        tau = 0.01 if copy_freq < 10 else 1.0
+
+        best_score, global_step_cnt = 0, 0
+        scores, avg_scores, avg100_scores = [], [], []
+        global_step_cnt = 0
+        for e in range(max_episodes):
+            state = env.reset() # with framestack wrapper
+            #state = env.reset()[0] # without framestack wrapper
+            state = self.preprocess(state)
+            state = np.expand_dims(state, axis=0)
+            done = False
+            ep_reward = 0
+            while not done:
+                global_step_cnt += 1
+                # take action
+                action = self.get_action(state)
+                # collect reward
+                next_state, reward, done, _ = env.step(action) # with framestack wrapper
+                #next_state, reward, done, _, _ = env.step(action) # without framestack wrapper
+                next_state = self.preprocess(next_state) # (H, W, C)
+                next_state = np.expand_dims(next_state, axis=0) # (B, H, W, C)
+                # store experiences in eplay buffer
+                self.store_experience(state, action, reward, next_state, done)
+                state = next_state
+                ep_reward += reward
+                # train
+                if global_step_cnt % train_freq == 0:
+                    self.experience_replay()
+
+                # update target model
+                if global_step_cnt % copy_freq == 0:
+                    self.update_target_model(tau=tau)
+                # end of while-loop
+            if ep_reward > best_score:
+                self.save_model(wt_filename)
+                best_score = ep_reward
+            scores.append(ep_reward)
+            avg_scores.append(np.mean(scores))
+            avg100_scores.append(np.mean(scores[-100:]))
+            if filename is not None:
+                file.write(f'{e}\t{ep_reward}\t{np.mean(scores)}\t{np.mean(scores[-100:])}\n')
+                file.flush()
+                os.fsync(file.fileno())
+            print(f'\re:{e}, ep_reward: {ep_reward}, avg_ep_reward: {np.mean(scores):.2f}', end="")
+            sys.stdout.flush()
+        # end of for loop
+        print('\nEnd of training')
+        if filename is not None:
+            file.close()
+            
+    def validate(self, env, num_episodes=10, wt_file=None, gif_file=None):
+        #ipdb.set_trace()
+        if wt_file is not None:
+            self.load_model(wt_file)
+        frames, scores, steps = [], [], []
+        for i in range(num_episodes):
+            #sys.stdout.flush()
+            state = env.reset()
+            state = self.preprocess(state) # (H, W, C)
+            state = np.expand_dims(state, axis=0) # (B, H, W, C)
+            step = 0
+            ep_reward = 0
+            while True:
+                step += 1
+                if gif_file is not None and env.render_mode == 'rgb_array':
+                    frame = env.render() # with framestack wrapper
+                    #frame = env.render()[0] # without framestack wrapper
+                    frames.append(_label_with_episode_number(frame, i, step))
+                action = self.get_action(state, epsilon=0) # exploit
+                next_state, reward, done, _ = env.step(action) # while using framestack wrapper
+                #next_state, reward, done, _, _ = env.step(action) # not using framestack wrapper
+                next_state = self.preprocess(next_state)
+                next_state = np.expand_dims(next_state, axis=0)
+                state = next_state
+                ep_reward += reward
+                if done:
+                    scores.append(ep_reward)
+                    if gif_file is not None and env.render_mode == 'rgb_array':
+                        frame = env.render()
+                        frames.append(_label_with_episode_number(frame, i, step))
+                    break
+            # while-loop ends here
+            scores.append(ep_reward)
+            steps.append(step)
+            print(f'\repisode: {i}, reward: {ep_reward:.2f}, steps: {step}')
+        # for-loop ends here
+        if gif_file is not None:
+            imageio.mimwrite(os.path.join('./', gif_file), frames, duration=1000/60)
+        print('\nAverage episodic score: ', np.mean(scores))
+        print('\nAverage episodic steps: ', np.mean(steps))

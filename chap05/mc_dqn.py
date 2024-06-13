@@ -4,6 +4,7 @@ We solve the Mountain Car Problem using DQN/DDQN/PER
     in less than 200 steps. 
 """
 import gymnasium as gym
+import keras.optimizers
 import matplotlib.pyplot as plt 
 import numpy as np
 import os 
@@ -182,7 +183,7 @@ if __name__ == '__main__':
         keras.layers.Dense(60, activation='relu'),
         keras.layers.Dense(n_actions, activation='linear')
     ])
-    model.compile(loss='mse', optimizer='adam')
+    model.compile(loss='mse', optimizer=keras.optimizers.Adam(learning_rate=0.001))
 
 
     # create a DQN PER Agent
