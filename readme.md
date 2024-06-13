@@ -22,4 +22,27 @@
 * Monte-Carlo Control Algorithm
     - `./chap03/mc_control.py`
     - `./chap03/mc_control_2.py`
+
+## Chapter 04: Temporal Difference Learning
+* Q Learning Algorithm 
+    - `./chap04/qlearn.py`
+
+* SARSA Algorithm
+    -  `./chap04/sarsa.py`
+
+
+## Chapter 05: Deep Q Networks
+
+* DQN/DDQN/PER
+    - `./chap05/dqn.py`
     
+* Replay Buffers
+    - `./chap05/buffer.py`
+
+* Gym Wrapper
+    - `./chap05/wrappers.py`
+
+* Problems
+    - `./chap05/cp_dqn.py` (CartPole Environment)
+    - `./chap05/mc_dqn.py` (MountainCar Environment)
+    - `./chap05/atari_dqn.py` (Atari Environments)

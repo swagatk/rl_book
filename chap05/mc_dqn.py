@@ -87,7 +87,8 @@ def train(env, agent, max_episodes=300,
                 agent.update_target_model(tau=tau)
                 
             if done and t < max_steps:
-                print('\nSuccessfully solved the problem in {} episodes. max_pos:{:.2f}, steps: {}\n'.format(e, max_pos, t))
+                print('\nSuccessfully solved the problem in {} episodes. \
+                                max_pos:{:.2f}, steps: {}\n'.format(e, max_pos, t))
                 agent.save_model(wt_filename)
                 
             if t >= max_steps:
