@@ -1,4 +1,4 @@
-# Deep Reinforcement Learning
+# Deep Reinforcement Learning with Tensorflow 2.x
 
 ## Chapter 02: Markov Decision Process
 * Value Iteration algorithm: 
@@ -46,3 +46,20 @@
     - `./chap05/cp_dqn.py` (CartPole Environment)
     - `./chap05/mc_dqn.py` (MountainCar Environment)
     - `./chap05/atari_dqn.py` (Atari Environments)
+
+
+## Chapter 06: Policy Gradient Methods
+
+* Monte-Carlo Policy Gradient
+    - `./chap06/reinforce.py`
+
+* Deep Deterministic Policy Gradient (DDPG)
+    - `./chap06/ddpg.py`
+
+* Utilities
+    - `./chap06/utils.py` 
+
+* Problems
+    - `./chap06/cp_reinforce.py` (CartPole-v0)
+    - `./chap06/ll_reinforce.py` (LunarLander-v2)
+    - `./chap06/pendu_ddpg.py` (Pendulum-v1)
