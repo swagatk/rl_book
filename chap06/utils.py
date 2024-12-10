@@ -4,6 +4,8 @@ import PIL.ImageDraw as ImageDraw
 import matplotlib.pyplot as plt 
 import numpy as np
 import pandas as pd
+import os 
+import gymnasium as gym
 
 def _label_with_episode_number(frame, episode_num, step_num):
     im = Image.fromarray(frame)
@@ -22,7 +24,6 @@ def validate(env, agent, num_episodes=10, gif_file=None, max_steps=None):
     frames, scores, steps = [], [], []
     for i in range(num_episodes):
         state = env.reset()[0]
-        state = np.expand_dims(state, axis=0)
         ep_reward = 0
         step = 0
         while True:
@@ -30,9 +31,8 @@ def validate(env, agent, num_episodes=10, gif_file=None, max_steps=None):
             if gif_file is not None and env.render_mode == 'rgb_array':
                 frame = env.render()
                 frames.append(_label_with_episode_number(frame, i, step))
-            action = agent.choose_action(state) 
+            action = agent.policy(state) 
             next_state, reward, done, _, _ = env.step(action) 
-            next_state = np.expand_dims(next_state, axis=0)
             state = next_state
             ep_reward += reward
             if max_steps is not None and step > max_steps:

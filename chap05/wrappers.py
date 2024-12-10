@@ -1,6 +1,6 @@
 from collections import deque
 import gymnasium as gym
-from gym.spaces import Box
+from gymnasium.spaces import Box
 import numpy as np
 
 class FrameStack(gym.Wrapper):

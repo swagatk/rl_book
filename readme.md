@@ -1,5 +1,10 @@
 # Deep Reinforcement Learning with Tensorflow 2.x
 
+## Dependencies
+- Tensorflow 2.x
+- Tensorflow Probability
+- Gymnasium
+
 ## Chapter 02: Markov Decision Process
 * Value Iteration algorithm: 
 
@@ -33,6 +38,9 @@
 
 ## Chapter 05: Deep Q Networks
 
+* Dependencies
+    - `pip install gymnasium[atari], gymnasium[accept-rom-license], gymnasium[classic-control]`
+
 * DQN/DDQN/PER
     - `./chap05/dqn.py`
     
@@ -50,16 +58,24 @@
 
 ## Chapter 06: Policy Gradient Methods
 
+* Dependencies:
+    - `pip install gymnasium[box2d], swig`
+
 * Monte-Carlo Policy Gradient
     - `./chap06/reinforce.py`
 
 * Deep Deterministic Policy Gradient (DDPG)
     - `./chap06/ddpg.py`
 
+* Proximal Policy Optimization (PPO)
+    - `./chap06/ppo.py`
+
 * Utilities
     - `./chap06/utils.py` 
 
 * Problems
     - `./chap06/cp_reinforce.py` (CartPole-v0)
-    - `./chap06/ll_reinforce.py` (LunarLander-v2)
+    - `./chap06/lunarlander_reinforce.py` (LunarLander-v2)
     - `./chap06/pendu_ddpg.py` (Pendulum-v1)
+    - `./chap06/pendu_ppo.py` (Pendulum-v1)
+    - `./chap06/lunarlander_ppo.py` (LunarLander-v2-Continuous)

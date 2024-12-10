@@ -29,7 +29,8 @@ class PolicyNetwork():
         return model
         
     def __call__(self, state):
-        pi = self.model(state)
+        state = tf.expand_dims(tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
+        pi = tf.squeeze(self.model(state))
         return pi
 
 
@@ -43,14 +44,13 @@ class REINFORCEAgent:
         self.rewards = []
         self.obs_shape = obs_shape
         # create policy network
-        self.policy = PolicyNetwork(obs_shape, n_actions, lr=self.lr)
+        self.actor = PolicyNetwork(obs_shape, n_actions, lr=self.lr)
             
-    def choose_action(self, obs):
-        state = tf.convert_to_tensor(obs, dtype=tf.float32)
-        probs = self.policy(state)
+    def policy(self, state):
+        probs = self.actor(state)
         action_probs = tfp.distributions.Categorical(probs=probs)
         action = action_probs.sample()
-        return action.numpy()[0]
+        return action.numpy()
     
     def store_transitions(self, state, action, reward):
         self.states.append(state)
