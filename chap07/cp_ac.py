@@ -2,7 +2,7 @@
 Solving CartPole problem using Actor Critic Algorithm
 '''
 import gymnasium as gym
-from actor_critc import ACAgent 
+from actor_critic import ACAgent 
 import wandb 
 import os
 import numpy as np
@@ -14,8 +14,9 @@ CFG = dict(
     agent = 'ac',
 )
 
-def ac_train(env, agent, max_episodes=10000, log_freq=50, filename=None, wandb_log=False):
-    print('Environment name: ', env.spec.name)
+def ac_train(env, agent, max_episodes=10000, log_freq=50, 
+             stop_score=200, filename=None, wandb_log=False):
+    print('Environment name: ', env.spec.id)
     print('RL Agent name:', agent.name)
     
     assert isinstance(env.action_space, gym.spaces.Discrete),\
@@ -25,9 +26,10 @@ def ac_train(env, agent, max_episodes=10000, log_freq=50, filename=None, wandb_l
         file = open(filename, 'w')
 
     if wandb_log:
-        run = wandb.init(entity='swagatk', project=env.spec.name, config=CFG)
+        run = wandb.init(entity='swagatk', project=env.spec.id, config=CFG)
 
     ep_scores = []
+    best_score = -np.inf
     for e in range(max_episodes):
         done = False
         state = env.reset()[0]
@@ -41,27 +43,35 @@ def ac_train(env, agent, max_episodes=10000, log_freq=50, filename=None, wandb_l
             c_losses.append(c_loss)
             state = next_state
             ep_score += reward
-            if done:
-                ep_scores.append(ep_score)
-                if filename is not None:
-                    file.write(f'{e}\t{ep_score}\t{np.mean(ep_scores)}\t{a_loss}\t{c_loss}\n')
-                    file.flush()
-                    os.fsync(file.fileno())
-                if e % log_freq == 0:
-                    print(f'e:{e}, ep_score:{ep_score:.2f}, avg_ep_score:{np.mean(ep_scores):.2f},\
-                    avg100score:{np.mean(ep_scores[-100:]):.2f}')
-                
-                if wandb_log:
-                    wandb.log({
-                        'episode': e,
-                        'ep_score': ep_score, 
-                        'avg100score': np.mean(ep_scores[-100:]),
-                        'actor_loss': np.mean(a_losses),
-                        'critic_loss': np.mean(c_losses),
-                        'mean_score': np.mean(ep_scores),
-                    })
         # while loop ends here
-        if np.mean(ep_scores[-100:]) > 499:
+        ep_scores.append(ep_score)
+        if filename is not None:
+            file.write(f'{e}\t{ep_score}\t{np.mean(ep_scores)}\t{a_loss}\t{c_loss}\n')
+            file.flush()
+            os.fsync(file.fileno())
+
+        if e % log_freq == 0:
+            print(f'e:{e}, ep_score:{ep_score:.2f}, avg_ep_score:{np.mean(ep_scores):.2f},\
+            avg100score:{np.mean(ep_scores[-100:]):.2f}, \
+                best_score:{best_score:.2f}')
+        
+        if wandb_log:
+            wandb.log({
+                'episode': e,
+                'ep_score': ep_score, 
+                'avg100score': np.mean(ep_scores[-100:]),
+                'actor_loss': np.mean(a_losses),
+                'critic_loss': np.mean(c_losses),
+                'mean_score': np.mean(ep_scores),
+                'best_score': best_score,
+            })
+
+        if ep_score > best_score:
+            best_score = ep_score
+            agent.save_weights()
+            print(f'Best Score: {ep_score}, episode: {e}. Model saved.')
+
+        if np.mean(ep_scores[-100:]) > stop_score:
             print('The problem is solved in {} episodes'.format(e))
             break
     # for loop ends here
@@ -83,4 +93,5 @@ if __name__ == '__main__':
     agent = ACAgent(obs_shape, action_size)
 
     # train the RL agent on
-    ac_train(env, agent, max_episodes=3000, log_freq=100, wandb_log=True)
+    ac_train(env, agent, max_episodes=1500, log_freq=100, 
+             stop_score=499, wandb_log=True)

@@ -1,6 +1,15 @@
+'''
+A2C implementation with a single worker.
+'''
+
 import tensorflow as tf
 import numpy as np
 import tensorflow_probability as tfp
+
+
+#########################
+
+######################
 class Actor():
     def __init__(self, obs_shape, action_size, lr=1e-4, model=None):
         self.obs_shape = obs_shape
@@ -25,23 +34,12 @@ class Actor():
         model.summary()
         return model
 
-    def __call__(self, states, target=False):
-        if not target: # return probabilities
-            pi = tf.squeeze(self.model(states))
-        else:
-            pi = tf.squeeze(self.target(states))
+    def __call__(self, states):
+        # returns action probabilities for each state
+        pi = tf.squeeze(self.model(states))
         return pi
     
-    def train(self, state, action, advantage):
-        with tf.GradientTape() as tape:
-            actor_wts = self.model.trainable_variables
-            pi = self.model(state)
-            action_dist = tfp.distributions.Categorical(probs=pi)
-            log_prob = action_dist.log_prob(action)
-            actor_loss = -log_prob * advantage
-            actor_grad = tape.gradient(actor_loss, actor_wts)
-        self.optimizer.apply_gradients(zip(actor_grad, actor_wts))
-        return actor_loss
+
 
     def save_weights(self, filename: str):
         if filename.lower().endswith(".weights.h5"):
@@ -81,24 +79,13 @@ class Critic():
         model.summary()
         return model
 
-    def __call__(self, states, target=False):
-        if not target:
-            value = tf.squeeze(self.model(states))
-        else:
-            value = tf.squeeze(self.target(states))
+    def __call__(self, states):
+        # returns V(s) for each state
+        value = tf.squeeze(self.model(states))
         return value
+    
 
-    def train(self, states, rewards, next_states, dones):
-        with tf.GradientTape() as tape:
-            critic_wts = self.model.trainable_variables
-            values = self.model(states)
-            target_values = self.model(next_states)
-            y = rewards + self.gamma * (1 - dones) * target_values
-            critic_loss = tf.math.reduce_mean(tf.square(y - values)) # TD error
-            critic_grads = tape.gradient(critic_loss, critic_wts)
-        self.optimizer.apply_gradients(zip(critic_grads, critic_wts))
-        return critic_loss
-        
+
     def save_weights(self, filename: str):
         if filename.lower().endswith(".weights.h5"):
             self.model.save_weights(filename)
@@ -111,62 +98,80 @@ class Critic():
         else:
             raise ValueError("filename must end with '.weights.h5'")
 
-
-#################
-
-class ACAgent():
+##############
+class A2CAgent:
     def __init__(self, obs_shape, action_size, 
-                lr_a=1e-4, lr_c=1e-4, gamma=0.99,
-                a_model=None, c_model=None):
-        self.obs_shape = obs_shape
-        self.action_size = action_size
-        self.gamma = gamma
+                 lr_a=1e-4, lr_c=1e-4, gamma=0.99,
+                 a_model=None, c_model=None):
         self.lr_a = lr_a
         self.lr_c = lr_c
-        self.name = 'actor-critic'
+        
+        self.gamma = gamma
+        self.action_size = action_size
+        self.obs_shape = obs_shape
+        self.name = 'A2C'
 
-        # actor model
-        self.actor = Actor(self.obs_shape, self.action_size,
-                          lr=self.lr_a, model=a_model)
-        # critic model
-        self.critic = Critic(self.obs_shape, lr=self.lr_c, 
+        # create actor and critic networks
+        self.actor = Actor(obs_shape, action_size, lr=self.lr_a,
+                           model=a_model)
+        self.critic = Critic(obs_shape, lr=self.lr_c,
                              gamma=self.gamma, model=c_model)
 
     def policy(self, state):
         state = tf.expand_dims(tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
-        pi = self.actor(state) # action probabilities
-        action_dist = tfp.distributions.Categorical(probs=pi)
-        action = action_dist.sample()
+        pi = self.actor(state)
+        action_probs = tfp.distributions.Categorical(probs=pi)
+        action = action_probs.sample()
         return action.numpy()
+    
+    def compute_advantages(self, rewards, values, next_values, dones):
+        advantages = rewards + self.gamma * next_values * (1.0 - dones) - values
+        advantages = (advantages - np.mean(advantages)) / (np.std(advantages) + 1e-8)
+        return advantages
 
+    def compute_actor_loss(self, states, actions, advantages):
+        probs = self.actor(states)
+        action_dist = tfp.distributions.Categorical(probs=probs, dtype=tf.float32)
+        log_probs = action_dist.log_prob(actions)
+        actor_loss = -tf.reduce_mean(log_probs * advantages)
 
-    def train(self, state, action, reward, next_state, done):
-        state = tf.expand_dims(tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
-        action= tf.convert_to_tensor(action, dtype=tf.float32)
-        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
-        next_state = tf.expand_dims(tf.convert_to_tensor(next_state, dtype=tf.float32), axis=0)
-        done = tf.convert_to_tensor(done, dtype=tf.float32)
-        value = self.critic(state)
-        next_value = self.critic(next_state)
-        td_target = reward + self.gamma * next_value * (1 - done)
-        advantage = td_target - value
-        a_loss = self.actor.train(state, action, advantage)
-        c_loss = self.critic.train(state, reward, next_state, done)
-        return a_loss, c_loss
+        # entropy regularization
+        entropy = action_dist.entropy() 
+        actor_loss -= 0.01 * tf.reduce_mean(entropy)
+        return actor_loss
+
         
 
-    def save_weights(self, actor_wt_file='actor.weights.h5', 
-                    critic_wt_file='critic.weights.h5',
-                    buffer_file=None):
+    def train(self, states, actions, rewards, next_states, dones):
+        states = np.array(states, dtype=np.float32)
+        actions = np.array(actions, dtype=np.int32)
+        rewards = np.array(rewards, dtype=np.float32)
+        next_states = np.array(next_states, dtype=np.float32)
+        dones = np.array(dones, dtype=np.float32)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            next_values = self.critic(next_states)
+            advantages = self.compute_advantages(rewards, values, next_values, dones)
+            actor_loss = self.compute_actor_loss(states, actions,advantages)
+            critic_loss = tf.reduce_mean(tf.square(advantages))
+
+        # compute gradients 
+        actor_grads = tape1.gradient(actor_loss, self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss, self.critic.model.trainable_variables)
+
+        # apply gradients to the models
+        self.actor.optimizer.apply_gradients(zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(zip(critic_grads, self.critic.model.trainable_variables))
+        return actor_loss.numpy(), critic_loss.numpy()
+
+    
+    def save_weights(self, actor_wt_file='a2c_actor.weights.h5', 
+                    critic_wt_file='a2c_critic.weights.h5'):
         self.actor.save_weights(actor_wt_file)
         self.critic.save_weights(critic_wt_file)
-        if buffer_file is not None:
-            self.buffer.save(buffer_file)
         
-    def load_weights(self, actor_wt_file='actor.weights.h5', 
-                     critic_wt_file='critic.weights.h5',
-                    buffer_file=None):
+    def load_weights(self, actor_wt_file='a2c_actor.weights.h5', 
+                     critic_wt_file='a2c_critic.weights.h5'):
         self.actor.load_weights(actor_wt_file)
         self.critic.load_weights(critic_wt_file)
-        if buffer_file is not None:
-            self.buffer.load(buffer_file)

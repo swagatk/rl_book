@@ -43,6 +43,7 @@ class REINFORCEAgent:
         self.actions = []
         self.rewards = []
         self.obs_shape = obs_shape
+        self.name = 'REINFORCE'
         # create policy network
         self.actor = PolicyNetwork(obs_shape, n_actions, lr=self.lr)
             
@@ -76,7 +77,7 @@ class REINFORCEAgent:
             loss = 0
             for idx, (g, state) in enumerate(zip(G, self.states)):
                 state = tf.convert_to_tensor(state, dtype=tf.float32)
-                probs = self.policy(state)
+                probs = self.actor(state)
                 action_probs = tfp.distributions.Categorical(probs=probs)
                 log_prob = action_probs.log_prob(actions[idx])
                 loss += -g * tf.squeeze(log_prob)
@@ -91,13 +92,13 @@ class REINFORCEAgent:
         
     def save_weights(self, filename: str):
         if filename.lower().endswith(".weights.h5"):
-            self.policy.model.save_weights(filename)
+            self.actor.model.save_weights(filename)
         else:
             raise ValueError("filename must end with '.weights.h5'")
         
     def load_weights(self, filename: str):
         if filename.lower().endswith(".weights.h5"):
-            self.policy.model.load_weights(filename)
+            self.actor.model.load_weights(filename)
         else:
             raise ValueError("filename must end with '.weights.h5'")
         

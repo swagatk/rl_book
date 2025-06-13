@@ -20,8 +20,13 @@ def _label_with_episode_number(frame, episode_num, step_num):
     return im
 
 
-def validate(env, agent, num_episodes=10, gif_file=None, max_steps=None):
+def validate(env, agent, num_episodes=10, max_steps=None, gif_file=None):
     frames, scores, steps = [], [], []
+    if gif_file:
+        if env.render_mode != 'rgb_array':
+            raise ValueError('To save a GIF, the environment must be in rgb_array render mode.')
+        if not gif_file.endswith('.gif'):
+            gif_file += '.gif'
     for i in range(num_episodes):
         state = env.reset()[0]
         ep_reward = 0
@@ -68,48 +73,3 @@ def plot_datafile(filename:str, column_names:list, title:str):
     ax.set_ylabel('Episodic Rewards')
     ax.set_title(title)
 
-
-# training an agent for a problem environment
-def train_agent_for_env(env, agent, max_episodes=1000, filename=None, max_score=200, min_score=-250):
-    if filename is not None:
-        file = open(filename, 'w')
-    scores, avgscores, avg100scores = [], [], []
-    best_score = 0
-    for e in range(max_episodes):
-        done = False
-        score = 0
-        state = env.reset()[0]
-        state = np.expand_dims(state, axis=0)
-        while not done:
-            action = agent.choose_action(state)
-            next_state, reward, done, _, _ = env.step(action)
-            next_state = np.expand_dims(next_state, axis=0)
-            agent.store_transitions(state, action, reward)
-            score += reward
-            state = next_state
-            # terminate episode if episodic score is beyond limit
-            if score > max_score or score < min_score: 
-                done = True
-        # end of while loop
-        # train the agent at the end of each episode
-        agent.train()
-        scores.append(score)
-        avgscores.append(np.mean(scores))
-        avg100scores.append(np.mean(scores[-100:]))
-        if score > best_score:
-            best_score = score
-            agent.save_weights('best_model.weights.h5')
-            print(f'Best Score: {score}, episode: {e}. Model saved.')
-            if score > 200:
-                print(f'Problem is solved in {e} episodes.')
-                break 
-        
-        if filename is not None:
-            file.write(f'{e}\t{score}\t{np.mean(scores):.2f}\t{np.mean(scores[-100:]):.2f}\n')
-            file.flush()
-            os.fsync(file.fileno())
-        if e % 100== 0:
-            print('episode:{}, score: {:.2f}, avgscore: {:.2f}, avg100score: {:.2f}'\
-                 .format(e, score, np.mean(scores), np.mean(scores[-100:])))
-    # end of for-loop
-    file.close()

@@ -79,3 +79,8 @@
     - `./chap06/pendu_ddpg.py` (Pendulum-v1)
     - `./chap06/pendu_ppo.py` (Pendulum-v1)
     - `./chap06/lunarlander_ppo.py` (LunarLander-v2-Continuous)
+
+## Chapter 07: Actor-Critic Models
+
+* Naive Actor-Critic Algorithm
+* A2C Algorithm

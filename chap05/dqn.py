@@ -23,6 +23,7 @@ class DQNAgent:
         self.buffer_size = buffer_size  # replay buffer size
         self.train_start = 1000     # minimum buffer size to start training
         self.learning_rate = 0.001
+        self.name = 'DQN'
         # create a replay buffer to store experiences
         self.memory = ReplayBuffer(self.buffer_size)
         # create main model and target model
@@ -171,6 +172,7 @@ class DQNPERAgent(DQNAgent):
 
         # uses a sumtree Buffer
         self.memory = STBuffer(capacity=buffer_size)
+        self.name = 'DQN_PER'
 
     def experience_replay(self):
         if len(self.memory) < self.train_start:
