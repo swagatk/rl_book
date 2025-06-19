@@ -1,5 +1,9 @@
 '''
 A2C implementation with a single worker.
+- In this case, discounted returns is used as the target value for computing TD error. 
+- the advance is estimated using the TD error.
+- It has same performance as the other a2c implementation that computes advantages 
+    using rewards, values, next_values, and dones.
 '''
 
 import tensorflow as tf
@@ -173,7 +177,8 @@ class A2CAgent:
             values = self.critic(states)
             td_error = tf.math.subtract(discnt_rewards, values)
             actor_loss = self.actor.compute_actor_loss(states, actions, td_error)
-            critic_loss = 0.5 * tf.keras.losses.MeanSquaredError()(discnt_rewards, values) 
+            #critic_loss = 0.5 * tf.keras.losses.MeanSquaredError()(discnt_rewards, values) 
+            critic_loss = tf.reduce_mean(tf.square(td_error))
 
         actor_grads = tape1.gradient(actor_loss, self.actor.model.trainable_variables)
         critic_grads = tape2.gradient(critic_loss, self.critic.model.trainable_variables)

@@ -1,5 +1,9 @@
 '''
 A2C implementation with a single worker.
+
+- It computes advantages using rewards, values, next_values, and dones. 
+- It does not require computing return values for each episode. 
+- TD error is used to estimate advantages.
 '''
 
 import tensorflow as tf
@@ -67,7 +71,6 @@ class Critic():
             self.model = model
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
 
-
     def _build_model(self): # returns V(s)
         sinput = tf.keras.layers.Input(shape=self.obs_shape)
         x = tf.keras.layers.Dense(128, activation='relu')(sinput)
@@ -84,8 +87,6 @@ class Critic():
         value = tf.squeeze(self.model(states))
         return value
     
-
-
     def save_weights(self, filename: str):
         if filename.lower().endswith(".weights.h5"):
             self.model.save_weights(filename)
@@ -101,7 +102,7 @@ class Critic():
 ##############
 class A2CAgent:
     def __init__(self, obs_shape, action_size, 
-                 lr_a=1e-4, lr_c=1e-4, gamma=0.99,
+                 lr_a=1e-4, lr_c=1e-3, gamma=0.99,
                  a_model=None, c_model=None):
         self.lr_a = lr_a
         self.lr_c = lr_c
@@ -141,7 +142,7 @@ class A2CAgent:
         return actor_loss
 
         
-
+    @tf.function
     def train(self, states, actions, rewards, next_states, dones):
         states = np.array(states, dtype=np.float32)
         actions = np.array(actions, dtype=np.int32)
@@ -164,6 +165,30 @@ class A2CAgent:
         self.actor.optimizer.apply_gradients(zip(actor_grads, self.actor.model.trainable_variables))
         self.critic.optimizer.apply_gradients(zip(critic_grads, self.critic.model.trainable_variables))
         return actor_loss.numpy(), critic_loss.numpy()
+    
+    def compute_gradients(self, states, actions, rewards, next_states, dones):
+        states = np.array(states, dtype=np.float32)
+        actions = np.array(actions, dtype=np.int32)
+        rewards = np.array(rewards, dtype=np.float32)
+        next_states = np.array(next_states, dtype=np.float32)
+        dones = np.array(dones, dtype=np.float32)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            next_values = self.critic(next_states)
+            advantages = self.compute_advantages(rewards, values, next_values, dones)
+            actor_loss = self.compute_actor_loss(states, actions, advantages)
+            critic_loss = tf.reduce_mean(tf.square(advantages))
+
+        # compute gradients 
+        actor_grads = tape1.gradient(actor_loss, self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss, self.critic.model.trainable_variables)
+
+        return actor_loss.numpy(), critic_loss.numpy(), actor_grads, critic_grads
+    
+    def apply_gradients(self, actor_grads, critic_grads):
+        self.actor.optimizer.apply_gradients(zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(zip(critic_grads, self.critic.model.trainable_variables))
 
     
     def save_weights(self, actor_wt_file='a2c_actor.weights.h5', 
@@ -175,3 +200,10 @@ class A2CAgent:
                      critic_wt_file='a2c_critic.weights.h5'):
         self.actor.load_weights(actor_wt_file)
         self.critic.load_weights(critic_wt_file)
+
+    def get_weights(self):
+        return self.actor.model.get_weights(), self.critic.model.get_weights()
+
+    def set_weights(self, actor_weights, critic_weights):
+        self.actor.model.set_weights(actor_weights)
+        self.critic.model.set_weights(critic_weights)

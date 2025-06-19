@@ -1,13 +1,16 @@
 import pyautogui
 import threading
-import datetime
+import time
 import random
+
+pyautogui.PAUSE = 0.1
 
 screenSize = pyautogui.size()
 
 def moveMouse():
-    x = random.randint(int(0.3 * screenSize[0]), int(0.8 * screenSize[0]))
-    y = random.randint(int(0.3 * screenSize[1]), int(0.8 * screenSize[1]))
+    safe_margin = 10
+    x = random.randint(safe_margin + int(0.3 * screenSize[0]), int(0.8 * screenSize[0]))
+    y = random.randint(safe_margin + int(0.3 * screenSize[1]), int(0.8 * screenSize[1]))
     pyautogui.moveTo(x, y, duration = 1)
 
 def clickMouse():
@@ -15,7 +18,17 @@ def clickMouse():
     main()
 
 def main():
-    hour = datetime.datetime.now().hour
-    threading.Timer(5.0, moveMouse).start()
-    threading.Timer(10.0, clickMouse).start()
-main()
+    try:
+        while True:
+            moveMouse()
+            time.sleep(1.0)
+            if time.time() % 10 < 10:
+                clickMouse()
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        print("Script terminated by user")
+        exit(-1)
+
+
+if __name__ == '__main__':
+    main()

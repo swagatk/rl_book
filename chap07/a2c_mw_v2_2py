@@ -1,0 +1,323 @@
+import gymnasium as gym
+import numpy as np
+import multiprocessing
+import time
+import wandb
+import os
+import gc
+import queue
+from a2c_v2 import A2CAgent
+from collections import deque
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable GPU for this script
+
+import tensorflow as tf
+from tensorflow.keras import layers, Model
+import tensorflow_probability as tfp
+
+# Hyperparameters
+DEBUG = False  # Set to True for debugging output
+GLOBAL_MAX_EPISODES = 1500
+N_WORKERS = min(multiprocessing.cpu_count(), 20) 
+SAVE_THRESHHOLD = 100
+##########################
+
+# create actor & Critic models
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
+
+#################################
+
+
+# Worker function for each process
+def worker(worker_id, global_weights_queue, 
+           gradients_queue,
+           save_request_queue,
+           env_id, 
+           max_score = 500, 
+           min_score = -500, 
+           max_steps = None, 
+           wandb_log=False):
+
+    # Set random seed for reproducibility in each process
+    tf.random.set_seed(worker_id + 1)
+    np.random.seed(worker_id + 1)
+
+    # create environment
+    env = gym.make(env_id)
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    # Create local network and environment
+    actor = create_actor_model(obs_shape, action_size)
+    critic = create_critic_model(obs_shape)
+    local_network = A2CAgent(obs_shape, action_size,
+                             a_model=actor, c_model=critic)
+
+    if wandb_log and worker_id == 0:
+        run = wandb.init(
+            project=env.spec.id,  # Replace with your WandB project name
+            entity='swagatk',  # Replace with your WandB entity
+            config={
+                'lr_a': local_network.lr_a,
+                'lr_c': local_network.lr_c,
+                'gamma': local_network.gamma,
+                'group': 'expt_10',
+                'agent': 'A3C',
+            }
+        )
+
+    episode = 0
+    ep_scores = [] 
+    best_score = -np.inf
+    for episode in range(GLOBAL_MAX_EPISODES):
+        weights_updated = False
+        for _ in range(3):  # Retry up to 3 times
+            try:
+                global_weights = global_weights_queue.get_nowait()
+                local_network.set_weights(*global_weights)
+                weights_updated = True
+                if DEBUG:
+                    print(f"Worker {worker_id}: Retrieved global weights from queue")
+                break
+            except queue.Empty:
+                if DEBUG:
+                    print(f"Worker {worker_id}: Global weights queue empty, retrying...")
+                time.sleep(0.1)  # Brief pause before retry
+        if not weights_updated:
+            if DEBUG:
+                print(f"Worker {worker_id}: Using current weights after failed attempts")
+            # Continue with current weights if queue is empty
+
+        state = env.reset()[0]
+        episode_reward = 0
+        done = False
+        step = 0
+        states = deque(maxlen=max_steps if max_steps is not None else 1000) 
+        actions = deque(maxlen=max_steps if max_steps is not None else 1000) 
+        rewards = deque(maxlen=max_steps if max_steps is not None else 1000)
+        next_states = deque(maxlen=max_steps if max_steps is not None else 1000)
+        dones = deque(maxlen=max_steps if max_steps is not None else 1000)
+
+        # Collect trajectory
+        while not done: 
+            action = int(local_network.policy(state))
+            next_state, reward, done, truncated, _ = env.step(action)
+            done = done or truncated
+
+            states.append(state) # type: ignore
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+            dones.append(done)
+
+            state = next_state
+            episode_reward += reward
+
+            step += 1
+
+            if max_score is not None and episode_reward >= max_score:
+                done = True
+            if min_score is not None and episode_reward <= min_score:
+                done = True
+            if max_steps is not None and step >= max_steps:
+                done = True
+
+        # end of episode
+        ep_scores.append(episode_reward)
+
+        # update the local network 
+        a_loss, c_loss, actor_grads, critic_grads = local_network.compute_gradients(
+            states, actions, rewards, next_states, dones
+        )
+
+        # Update global network
+        try:
+            gradients_queue.put_nowait((actor_grads, critic_grads))
+        except queue.Full: 
+            if DEBUG:
+                print(f"Worker {worker_id}: Gradients queue is full, skipping update.")
+            continue
+
+
+        if episode_reward > best_score:
+            best_score = episode_reward
+        if wandb_log and worker_id == 0:
+            wandb.log({
+                'episode': episode,
+                'ep_score': episode_reward, 
+                'avg100score': np.mean(ep_scores[-100:]),
+                'mean_score': np.mean(ep_scores),
+                'best_score': best_score,
+                'actor_loss': a_loss,
+                'critic_loss': c_loss,
+            })
+
+        try:
+            save_request_queue.put_nowait((worker_id, episode, episode_reward))
+        except queue.Full:
+            if DEBUG:
+                print(f"Worker {worker_id}: Save request queue is full, skipping save request.")
+            continue
+
+        # free memory 
+        tf.keras.backend.clear_session()  # Clear TensorFlow session
+        states.clear()
+        actions.clear()
+        rewards.clear()
+        next_states.clear()
+        dones.clear()
+        gc.collect()  # Collect garbage to free memory
+        #print(f"Worker {worker_id}, Episode {episode}, Reward: {episode_reward:.2f}")
+    # end of for-loop
+    env.close()
+    if wandb_log and worker_id == 0:
+        run.finish()
+
+def main(wandb_log=True, max_score=500, min_score=-200,
+         max_steps=1000):
+    # Set random seed for reproducibility
+    tf.random.set_seed(42)
+    np.random.seed(42)
+
+    print('N_WORKERS:', N_WORKERS)
+
+    # Initialize environment to get state and action sizes
+    env = gym.make('LunarLander-v3')
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+    env_id = env.spec.id
+    env.close()
+
+    a_model = create_actor_model(obs_shape, action_size)
+    c_model = create_critic_model(obs_shape)
+    # Initialize global network
+    global_network = A2CAgent(obs_shape, action_size,
+                              a_model=a_model, c_model=c_model)
+
+    # Create a queue to share weights between processes
+    manager = multiprocessing.Manager()
+    global_weights_queue = manager.Queue(maxsize=2*N_WORKERS)
+    gradients_queue = manager.Queue(maxsize=2*N_WORKERS)
+    save_request_queue = manager.Queue(maxsize=N_WORKERS)
+    save_lock = manager.Lock()
+
+    # initial weights for the global network
+    for _ in range(2*N_WORKERS):
+        # Initialize the global weights queue with the global network's weights
+        global_weights_queue.put(global_network.get_weights())
+
+
+    # Create and start worker processes
+    processes = []
+    for i in range(N_WORKERS):
+        p = multiprocessing.Process(
+            target=worker,
+            args=(i, global_weights_queue, gradients_queue, 
+                  save_request_queue, env_id, 
+                  max_score, min_score, max_steps, wandb_log)
+        )
+        p.start()
+        processes.append(p)
+        print(f'Started worker {p.name}')
+
+    try:
+        last_refill_time = time.time()
+        best_reward = -np.inf
+        while(any(p.is_alive() for p in processes)):
+            gradients = []
+            for _ in range(N_WORKERS):
+                if not gradients_queue.empty():
+                    gradients.append(gradients_queue.get())
+
+            if gradients: # process gradients if available 
+                actor_grads_avg = []
+                critic_grads_avg = []
+                for actor_grads, critic_grads in gradients:
+                    if not actor_grads_avg:
+                        actor_grads_avg = [tf.convert_to_tensor(g) for g in actor_grads]
+                        critic_grads_avg = [tf.convert_to_tensor(g) for g in critic_grads]
+                    else:
+                        for i, g in enumerate(actor_grads):
+                            actor_grads_avg[i] += tf.convert_to_tensor(g)
+                        for i, g in enumerate(critic_grads):
+                            critic_grads_avg[i] += tf.convert_to_tensor(g)
+
+                actor_grads_avg = [g / N_WORKERS for g in actor_grads_avg]
+                critic_grads_avg = [g / N_WORKERS for g in critic_grads_avg]
+
+                global_network.apply_gradients(actor_grads_avg, critic_grads_avg)
+            
+                # Synchronize global weights with all workers
+                updated_weights = global_network.get_weights()
+                for _ in range(N_WORKERS):
+                    try:
+                        # Synchronize global weights with all workers
+                        global_weights_queue.put_nowait(updated_weights)
+                    except queue.Full:
+                        if DEBUG:
+                            print("Global weights queue is full, skipping synchronization.")
+                        while not global_weights_queue.empty():
+                            try: 
+                                global_weights_queue.get_nowait()
+                            except queue.Empty:
+                                break
+                        global_weights_queue.put_nowait(updated_weights)
+
+            # periodically refill the global weights queue
+            if time.time() - last_refill_time > 5:
+                try:
+                    global_weights_queue.put_nowait(global_network.get_weights())
+                    last_refill_time = time.time()
+                except queue.Full:
+                    if DEBUG:
+                        print("Global weights queue is full, skipping refill.")
+
+            # saving weights
+            while not save_request_queue.empty():
+                try:
+                    worker_id, episode, episode_reward = save_request_queue.get_nowait()
+                    print(f"Worker: {worker_id}, episode: {episode}, reward: {episode_reward:.2f}")
+                    if episode_reward > best_reward:
+                        best_reward = episode_reward
+                        with save_lock:
+                            try:
+                                global_network.save_weights(
+                                    actor_wt_file='a2c_actor.weights.h5',
+                                    critic_wt_file='a2c_critic.weights.h5',
+                                )
+                                print(f"Best Score: {best_reward}. Saved weights!")
+                            except Exception as e:
+                                print(f"Error saving weights: {e}")
+                except queue.Empty:
+                    break
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        print("Shutting down workers...")
+        #Wait for all processes to complete
+        for p in processes:
+            p.join()
+            print(f'Worker {p.name} has finished.')
+
+
+
+    
+
+if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
+    main()

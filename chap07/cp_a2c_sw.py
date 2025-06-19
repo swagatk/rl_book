@@ -1,5 +1,6 @@
 '''
 Solving CartPole problem using Advantage-Actor Critic (A2C) Algorithm
+- Single Worker version
 '''
 
 import gymnasium as gym

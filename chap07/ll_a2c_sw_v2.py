@@ -1,6 +1,9 @@
 
 '''
 Solving LunarLander-Discrete problem using Advantage-Actor Critic (A2C) Algorithm
+In this version, we do not compute discounted return instead we directly compute TD error to estimate the advantage.
+
+The parameters are updated after each episode. 
 '''
 
 import gymnasium as gym
@@ -14,7 +17,7 @@ import sys
 sys.path.append("/Share/rl_book/chap06") 
 from utils import validate
 
-train = True
+train = False
 
 ################
 # create actor & Critic models
@@ -144,14 +147,16 @@ if __name__ == '__main__':
     critic_net = create_critic_model(obs_shape)
 
     # create an RL agent
-    agent = A2CAgent(obs_shape, action_size) 
-    # agent = A2CAgent(obs_shape, action_size, 
-    #                  a_model=actor_net,  c_model=critic_net)
+    #agent = A2CAgent(obs_shape, action_size) 
+    agent = A2CAgent(obs_shape, action_size, 
+                      a_model=actor_net,  c_model=critic_net)
 
     if train:
         # train the RL agent on
         ac_train(env, agent, max_episodes=1500, log_freq=100, stop_score=200, max_score=500, min_score=-500, wandb_log=True)
     else:
+        print("Validation with best model weights")
         # validate the trained agent - generate a gif
         agent.load_weights()  # load the best weights
         validate(env, agent, num_episodes=10, max_steps=500, gif_file='lunarlander_ac.gif',)
+        print('Stopping here')

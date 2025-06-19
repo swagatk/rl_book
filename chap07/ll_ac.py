@@ -5,14 +5,35 @@ import gymnasium as gym
 import tensorflow as tf
 import tensorflow_probability as tfp
 import numpy as np
-from chap07.actor_critic import ACAgent
+from actor_critic import ACAgent
 import os
 import wandb
 import sys
 
 sys.path.append("/Share/rl_book/chap06") 
 from utils import validate
+
+train = True
 ##########
+
+# create actor & Critic models
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
 
 ###############
 def ac_train(env, agent, max_episodes=10000, log_freq=50, 
@@ -65,6 +86,7 @@ def ac_train(env, agent, max_episodes=10000, log_freq=50,
             best_score = ep_score
             if best_score > stop_score:
                 agent.save_weights()
+                print('Best score: {:.2f} at episode {}. Model Saved!'.format(best_score, e))
         
         if filename is not None:
             file.write(f'{e}\t{ep_score}\t{np.mean(ep_scores)}\t{a_loss}\t{c_loss}\n')
@@ -82,6 +104,7 @@ def ac_train(env, agent, max_episodes=10000, log_freq=50,
                 'actor_loss': np.mean(a_losses),
                 'critic_loss': np.mean(c_losses),
                 'mean_score': np.mean(ep_scores),
+                'best_score': best_score,
             })
         if e > 100 and np.mean(ep_scores[-100:]) > stop_score:
             print('The problem is solved in {} episodes'.format(e))
@@ -107,13 +130,16 @@ if __name__ == "__main__":
     print('Action Size: ', action_size)
     print('Max Episode steps: ', env.spec.max_episode_steps)
 
+    actor = create_actor_model(obs_shape, action_size)
+    critic = create_critic_model(obs_shape)
 
     # create an RL agent using above actor/critic models
-    agent = ACAgent(obs_shape, action_size)
+    agent = ACAgent(obs_shape, action_size,
+                    a_model=actor, c_model=critic)
 
     # train the RL agent on
-    #ac_train(env, agent, max_episodes=4000, min_score=-500, log_freq=100, stop_score=200, wandb_log=True)
+    ac_train(env, agent, max_episodes=1500, min_score=-500, log_freq=100, max_score=500, stop_score=200, wandb_log=True)
 
     # validate the agent
-    agent.load_weights()  # load the best weights
-    validate(env, agent, num_episodes=10, gif_file='lunarlander_ac.gif',)
+    # agent.load_weights()  # load the best weights
+    # validate(env, agent, num_episodes=10, gif_file='lunarlander_ac.gif',)

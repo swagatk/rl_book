@@ -4,7 +4,7 @@ Solving LunarLander-Discrete problem using Advantage-Actor Critic (A2C) Algorith
 '''
 
 import gymnasium as gym
-from a2c_sw import A2CAgent
+from chap07.a2c import A2CAgent
 import wandb 
 import os
 import numpy as np
