@@ -1,3 +1,12 @@
+'''
+Asynchronous Advantage Actor-Critic (A3C) implementation using TensorFlow and Gymnasium.
+
+* It uses A2CAgent class from a2c.py to implement the A3C algorithm.
+* It uses multipprocessing to run multiple workers in parallel, each worker interacts with the environment and updates a global network.
+* Gradients are collected from each worker and averaged before updating the global network.
+* It runs on multi-core CPU and does not use GPU for training.
+* Trying to make this code general enough to work with any environment. 
+'''
 import gymnasium as gym
 import numpy as np
 import multiprocessing
@@ -6,19 +15,15 @@ import wandb
 import os
 import gc
 import queue
-from a2c_v2 import A2CAgent
+from a2c import A2CAgent
 from collections import deque
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable GPU for this script
 
 import tensorflow as tf
-from tensorflow.keras import layers, Model
 import tensorflow_probability as tfp
 
 # Hyperparameters
 DEBUG = False  # Set to True for debugging output
-GLOBAL_MAX_EPISODES = 1500
-N_WORKERS = min(multiprocessing.cpu_count(), 20) 
-SAVE_THRESHHOLD = 100
 ##########################
 
 # create actor & Critic models
@@ -48,6 +53,9 @@ def worker(worker_id, global_weights_queue,
            gradients_queue,
            save_request_queue,
            env_id, 
+           create_actor_func=create_actor_model,
+           create_critic_func=create_critic_model,
+           max_episodes=1500,
            max_score = 500, 
            min_score = -500, 
            max_steps = None, 
@@ -63,8 +71,8 @@ def worker(worker_id, global_weights_queue,
     action_size = env.action_space.n
 
     # Create local network and environment
-    actor = create_actor_model(obs_shape, action_size)
-    critic = create_critic_model(obs_shape)
+    actor = create_actor_func(obs_shape, action_size)
+    critic = create_critic_func(obs_shape)
     local_network = A2CAgent(obs_shape, action_size,
                              a_model=actor, c_model=critic)
 
@@ -84,7 +92,7 @@ def worker(worker_id, global_weights_queue,
     episode = 0
     ep_scores = [] 
     best_score = -np.inf
-    for episode in range(GLOBAL_MAX_EPISODES):
+    for episode in range(max_episodes):
         weights_updated = False
         for _ in range(3):  # Retry up to 3 times
             try:
@@ -174,7 +182,7 @@ def worker(worker_id, global_weights_queue,
                 print(f"Worker {worker_id}: Save request queue is full, skipping save request.")
             continue
 
-        # free memory 
+        # free memory  
         tf.keras.backend.clear_session()  # Clear TensorFlow session
         states.clear()
         actions.clear()
@@ -182,29 +190,32 @@ def worker(worker_id, global_weights_queue,
         next_states.clear()
         dones.clear()
         gc.collect()  # Collect garbage to free memory
-        #print(f"Worker {worker_id}, Episode {episode}, Reward: {episode_reward:.2f}")
     # end of for-loop
     env.close()
     if wandb_log and worker_id == 0:
         run.finish()
 
-def main(wandb_log=True, max_score=500, min_score=-200,
-         max_steps=1000):
+def run_workers(env_name='LunarLander-v3', max_num_workers=5, max_episodes=1500, 
+         wandb_log=True, max_score=500, min_score=-200,
+         max_steps=1000,
+         create_actor_func=create_actor_model,
+         create_critic_func=create_critic_model):
     # Set random seed for reproducibility
     tf.random.set_seed(42)
     np.random.seed(42)
 
+    N_WORKERS = min(multiprocessing.cpu_count(), max_num_workers)
     print('N_WORKERS:', N_WORKERS)
 
     # Initialize environment to get state and action sizes
-    env = gym.make('LunarLander-v3')
+    env = gym.make(env_name)
     obs_shape = env.observation_space.shape
     action_size = env.action_space.n
     env_id = env.spec.id
     env.close()
 
-    a_model = create_actor_model(obs_shape, action_size)
-    c_model = create_critic_model(obs_shape)
+    a_model = create_actor_func(obs_shape, action_size)
+    c_model = create_critic_func(obs_shape)
     # Initialize global network
     global_network = A2CAgent(obs_shape, action_size,
                               a_model=a_model, c_model=c_model)
@@ -229,6 +240,8 @@ def main(wandb_log=True, max_score=500, min_score=-200,
             target=worker,
             args=(i, global_weights_queue, gradients_queue, 
                   save_request_queue, env_id, 
+                  create_actor_func, create_critic_func,  
+                  max_episodes,
                   max_score, min_score, max_steps, wandb_log)
         )
         p.start()
@@ -245,22 +258,31 @@ def main(wandb_log=True, max_score=500, min_score=-200,
                     gradients.append(gradients_queue.get())
 
             if gradients: # process gradients if available 
-                actor_grads_avg = []
-                critic_grads_avg = []
-                for actor_grads, critic_grads in gradients:
-                    if not actor_grads_avg:
-                        actor_grads_avg = [tf.convert_to_tensor(g) for g in actor_grads]
-                        critic_grads_avg = [tf.convert_to_tensor(g) for g in critic_grads]
-                    else:
-                        for i, g in enumerate(actor_grads):
-                            actor_grads_avg[i] += tf.convert_to_tensor(g)
-                        for i, g in enumerate(critic_grads):
-                            critic_grads_avg[i] += tf.convert_to_tensor(g)
+                # Filter out None gradients
+                valid_gradients = [
+                    (actor_grads, critic_grads)
+                    for actor_grads, critic_grads in gradients
+                    if actor_grads is not None and critic_grads is not None
+                ]
 
-                actor_grads_avg = [g / N_WORKERS for g in actor_grads_avg]
-                critic_grads_avg = [g / N_WORKERS for g in critic_grads_avg]
+                if valid_gradients:  # Only proceed if there are valid gradients
+                    actor_grads_avg = []
+                    critic_grads_avg = []
+                    for actor_grads, critic_grads in valid_gradients:
+                        if not actor_grads_avg:
+                            actor_grads_avg = [tf.convert_to_tensor(g) for g in actor_grads]
+                            critic_grads_avg = [tf.convert_to_tensor(g) for g in critic_grads]
+                        else:
+                            for i, g in enumerate(actor_grads):
+                                actor_grads_avg[i] += tf.convert_to_tensor(g)
+                            for i, g in enumerate(critic_grads):
+                                critic_grads_avg[i] += tf.convert_to_tensor(g)
 
-                global_network.apply_gradients(actor_grads_avg, critic_grads_avg)
+                    n = len(valid_gradients)
+                    actor_grads_avg = [g / n for g in actor_grads_avg]
+                    critic_grads_avg = [g / n for g in critic_grads_avg]
+
+                    global_network.apply_gradients(actor_grads_avg, critic_grads_avg)
             
                 # Synchronize global weights with all workers
                 updated_weights = global_network.get_weights()
@@ -297,8 +319,8 @@ def main(wandb_log=True, max_score=500, min_score=-200,
                         with save_lock:
                             try:
                                 global_network.save_weights(
-                                    actor_wt_file='a2c_actor.weights.h5',
-                                    critic_wt_file='a2c_critic.weights.h5',
+                                    actor_wt_file='a3c_actor.weights.h5',
+                                    critic_wt_file='a3c_critic.weights.h5',
                                 )
                                 print(f"Best Score: {best_reward}. Saved weights!")
                             except Exception as e:
@@ -320,4 +342,4 @@ def main(wandb_log=True, max_score=500, min_score=-200,
 
 if __name__ == '__main__':
     multiprocessing.set_start_method('spawn')
-    main()
+    run_workers()

@@ -103,9 +103,12 @@ class Critic():
 class A2CAgent:
     def __init__(self, obs_shape, action_size, 
                  lr_a=1e-4, lr_c=1e-3, gamma=0.99,
+                 entropy_beta=0.01, grad_clip_norm=5.0,
                  a_model=None, c_model=None):
         self.lr_a = lr_a
         self.lr_c = lr_c
+        self.entropy_beta = entropy_beta
+        self.grad_clip_norm = grad_clip_norm
         
         self.gamma = gamma
         self.action_size = action_size
@@ -121,8 +124,12 @@ class A2CAgent:
     def policy(self, state):
         state = tf.expand_dims(tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
         pi = self.actor(state)
+        pi_np = pi.numpy()
+        if np.isnan(pi_np).any() or np.isinf(pi_np).any():
+            raise ValueError(f"NaN/inf detected in action probabilities: {pi_np}.")
         action_probs = tfp.distributions.Categorical(probs=pi)
         action = action_probs.sample()
+        #action = tf.clip_by_value(action, 0, self.action_size - 1)  # ensure valid action
         return action.numpy()
     
     def compute_advantages(self, rewards, values, next_values, dones):
@@ -138,7 +145,7 @@ class A2CAgent:
 
         # entropy regularization
         entropy = action_dist.entropy() 
-        actor_loss -= 0.01 * tf.reduce_mean(entropy)
+        actor_loss -= self.entropy_beta * tf.reduce_mean(entropy)
         return actor_loss
 
         
@@ -183,6 +190,23 @@ class A2CAgent:
         # compute gradients 
         actor_grads = tape1.gradient(actor_loss, self.actor.model.trainable_variables)
         critic_grads = tape2.gradient(critic_loss, self.critic.model.trainable_variables)
+
+        actor_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \
+                        if grad is not None else None for grad in actor_grads ]
+        critic_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \
+                        if grad is not None else None for grad in critic_grads]  
+
+        # Check for NaN gradients
+        actor_has_nan = any(tf.reduce_any(tf.math.is_nan(grad)) for grad in actor_grads if grad is not None)
+        critic_has_nan = any(tf.reduce_any(tf.math.is_nan(grad)) for grad in critic_grads if grad is not None)
+
+
+        if actor_has_nan or critic_has_nan:
+            print(f"NaN gradients detected! "
+                  f"Actor NaN: {actor_has_nan}, Critic NaN: {critic_has_nan}, "
+                  f"Actor Loss: {actor_loss:.4f}, Critic Loss: {critic_loss:.4f}")
+            # Skip sending gradients to avoid corrupting global network
+            return None, None, None, None
 
         return actor_loss.numpy(), critic_loss.numpy(), actor_grads, critic_grads
     
