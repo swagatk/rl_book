@@ -1,4 +1,4 @@
-from a3c import run_workers
+from a3c_v2 import run_workers
 import multiprocessing
 import tensorflow as tf
 
@@ -32,5 +32,5 @@ if __name__ == '__main__':
         min_score=-200,
         max_steps=1000,
         create_actor_func=create_actor_model,
-        create_critic_func=create_critic_model,
+        create_critic_func=create_critic_model
     )

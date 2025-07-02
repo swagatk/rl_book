@@ -113,7 +113,7 @@ class A2CAgent:
         self.gamma = gamma
         self.action_size = action_size
         self.obs_shape = obs_shape
-        self.name = 'A2C'
+        self.name = 'A2C_v2'
 
         # create actor and critic networks
         self.actor = Actor(obs_shape, action_size, lr=self.lr_a,
@@ -191,6 +191,7 @@ class A2CAgent:
         actor_grads = tape1.gradient(actor_loss, self.actor.model.trainable_variables)
         critic_grads = tape2.gradient(critic_loss, self.critic.model.trainable_variables)
 
+        # clip gradients 
         actor_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \
                         if grad is not None else None for grad in actor_grads ]
         critic_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \

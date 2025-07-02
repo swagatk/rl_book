@@ -2,6 +2,7 @@
 Asynchronous Advantage Actor-Critic (A3C) implementation using TensorFlow and Gymnasium.
 
 * It uses A2CAgent class from a2c_v2.py to implement the A3C algorithm.
+* It computes advantages using rewards, values, next_values, and dones.
 * It uses multipprocessing to run multiple workers in parallel, each worker interacts with the environment and updates a global network.
 * Gradients are collected from each worker and averaged before updating the global network.
 * It runs on multi-core CPU and does not use GPU for training.
@@ -20,33 +21,12 @@ from collections import deque
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable GPU for this script
 
 import tensorflow as tf
-from tensorflow.keras import layers, Model
 import tensorflow_probability as tfp
 
 # Hyperparameters
 DEBUG = False  # Set to True for debugging output
 ##########################
 
-# create actor & Critic models
-def create_actor_model(obs_shape, n_actions):
-    s_input = tf.keras.layers.Input(shape=obs_shape)
-    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
-    x = tf.keras.layers.Dense(128, activation='relu')(x)
-    a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
-    model = tf.keras.models.Model(s_input, a, name='actor_network')
-    model.summary()
-    return model
-
-def create_critic_model(obs_shape):
-    s_input = tf.keras.layers.Input(shape=obs_shape)
-    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
-    x = tf.keras.layers.Dense(128, activation='relu')(x)
-    v = tf.keras.layers.Dense(1, activation=None)(x)
-    model = tf.keras.models.Model(s_input, v, name='critic_network')
-    model.summary()
-    return model
-
-#################################
 
 
 # Worker function for each process
@@ -54,6 +34,8 @@ def worker(worker_id, global_weights_queue,
            gradients_queue,
            save_request_queue,
            env_id, 
+           create_actor_func=None,
+           create_critic_func=None,
            max_episodes=1500,
            max_score = 500, 
            min_score = -500, 
@@ -70,8 +52,15 @@ def worker(worker_id, global_weights_queue,
     action_size = env.action_space.n
 
     # Create local network and environment
-    actor = create_actor_model(obs_shape, action_size)
-    critic = create_critic_model(obs_shape)
+    if create_actor_func is not None:
+        actor = create_actor_func(obs_shape, action_size)
+    else:   
+        actor = None 
+    if create_critic_func is not None:
+        critic = create_critic_func(obs_shape)
+    else:
+        critic = None
+
     local_network = A2CAgent(obs_shape, action_size,
                              a_model=actor, c_model=critic)
 
@@ -195,9 +184,11 @@ def worker(worker_id, global_weights_queue,
     if wandb_log and worker_id == 0:
         run.finish()
 
-def main(env_name='LunarLander-v3', max_num_workers=5, max_episodes=1500, 
+def run_workers(env_name, max_num_workers=5, max_episodes=1500, 
          wandb_log=True, max_score=500, min_score=-200,
-         max_steps=1000):
+         max_steps=1000,
+         create_actor_func=None,
+         create_critic_func=None):
     # Set random seed for reproducibility
     tf.random.set_seed(42)
     np.random.seed(42)
@@ -207,16 +198,28 @@ def main(env_name='LunarLander-v3', max_num_workers=5, max_episodes=1500,
 
     # Initialize environment to get state and action sizes
     env = gym.make(env_name)
+
+
+    if not isinstance(env.action_space, gym.spaces.Discrete):
+        raise ValueError("A3C Agent currently supports discrete action spaces only")
+
     obs_shape = env.observation_space.shape
     action_size = env.action_space.n
     env_id = env.spec.id
     env.close()
 
-    a_model = create_actor_model(obs_shape, action_size)
-    c_model = create_critic_model(obs_shape)
+    if create_actor_func is not None:
+        actor = create_actor_func(obs_shape, action_size)
+    else:
+        actor = None
+    if create_critic_func is not None:
+        critic = create_critic_func(obs_shape)
+    else:
+        critic = None
+
     # Initialize global network
     global_network = A2CAgent(obs_shape, action_size,
-                              a_model=a_model, c_model=c_model)
+                              a_model=actor, c_model=critic)
 
     # Create a queue to share weights between processes
     manager = multiprocessing.Manager()
@@ -270,13 +273,13 @@ def main(env_name='LunarLander-v3', max_num_workers=5, max_episodes=1500,
                             critic_grads_avg = [tf.convert_to_tensor(g) for g in critic_grads]
                         else:
                             for i, g in enumerate(actor_grads):
-                                actor_grads_avg[i] += tf.convert_to_tensor(g)
+                                actor_grads_avg[i] = tf.add(actor_grads_avg[i], tf.convert_to_tensor(g))
                             for i, g in enumerate(critic_grads):
-                                critic_grads_avg[i] += tf.convert_to_tensor(g)
+                                critic_grads_avg[i] = tf.add(critic_grads_avg[i], tf.convert_to_tensor(g))
 
                     n = len(valid_gradients)
-                    actor_grads_avg = [g / n for g in actor_grads_avg]
-                    critic_grads_avg = [g / n for g in critic_grads_avg]
+                    actor_grads_avg = [tf.math.truediv(g, n) for g in actor_grads_avg]
+                    critic_grads_avg = [tf.math.truediv(g, n) for g in critic_grads_avg]
 
                     global_network.apply_gradients(actor_grads_avg, critic_grads_avg)
             
@@ -335,7 +338,3 @@ def main(env_name='LunarLander-v3', max_num_workers=5, max_episodes=1500,
 
 
     
-
-if __name__ == '__main__':
-    multiprocessing.set_start_method('spawn')
-    main()

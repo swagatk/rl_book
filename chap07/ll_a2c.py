@@ -17,12 +17,12 @@ from utils import validate
 train = True
 
 ################
+
 # create actor & Critic models
 def create_actor_model(obs_shape, n_actions):
     s_input = tf.keras.layers.Input(shape=obs_shape)
-    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
-    x = tf.keras.layers.Dense(512, activation='relu')(x)
-    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
     a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
     model = tf.keras.models.Model(s_input, a, name='actor_network')
     model.summary()
@@ -30,16 +30,15 @@ def create_actor_model(obs_shape, n_actions):
 
 def create_critic_model(obs_shape):
     s_input = tf.keras.layers.Input(shape=obs_shape)
-    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
-    x = tf.keras.layers.Dense(512, activation='relu')(x)
-    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
     v = tf.keras.layers.Dense(1, activation=None)(x)
     model = tf.keras.models.Model(s_input, v, name='critic_network')
     model.summary()
     return model
 
 ###################
-def ac_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_score=None, 
+def a2c_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_score=None, 
              stop_score=500, filename=None, wandb_log=False):
     print('Environment name: ', env.spec.id)
     print('RL Agent name:', agent.name)
