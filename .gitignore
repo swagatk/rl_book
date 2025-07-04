@@ -8,6 +8,7 @@ __pycache__/
 *.dat
 *.txt
 *.tsv
+*.gif
 #!requirements.txt
 chkpt/ 
 reload/
