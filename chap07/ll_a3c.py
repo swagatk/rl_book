@@ -1,3 +1,11 @@
+'''
+Solving LunarLander-Discrete problem using Asynchronous Advantage Actor Critic (A3C) Algorithm
+- This implementation uses multiple workers to run in parallel, each worker interacts with the environment
+  and updates a global network.
+- The global network is updated asynchronously by the workers, which helps in stabilizing the training process
+- It uses multi-core cpu processing to run multiple workers in parallel.
+
+'''
 from a3c import run_workers
 import multiprocessing
 import tensorflow as tf

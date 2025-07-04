@@ -4,7 +4,7 @@ Solving LunarLander-Discrete problem using Advantage-Actor Critic (A2C) Algorith
 '''
 
 import gymnasium as gym
-from chap07.a2c import A2CAgent
+from a2c import A2CAgent
 import wandb 
 import os
 import numpy as np
@@ -55,7 +55,8 @@ def a2c_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_s
                 'lr_a': agent.lr_a,
                 'lr_c': agent.lr_c,
                 'gamma': agent.gamma,
-                'agent': agent.name})
+                'agent': agent.name,
+                })
 
     ep_scores = []
     best_score = -np.inf
@@ -116,7 +117,7 @@ def a2c_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_s
     # for loop ends here
     if filename is not None:
         file.close()
-    if wandb.log:
+    if wandb_log:
         run.finish()
 
 if __name__ == '__main__':
@@ -142,13 +143,13 @@ if __name__ == '__main__':
     critic_net = create_critic_model(obs_shape)
 
     # create an RL agent
-    agent = A2CAgent(obs_shape, action_size) 
-    # agent = A2CAgent(obs_shape, action_size, 
-    #                  a_model=actor_net,  c_model=critic_net)
+    agent = A2CAgent(obs_shape, action_size, 
+                    a_model=actor_net,  c_model=critic_net)
 
     if train:
         # train the RL agent on
-        ac_train(env, agent, max_episodes=1500, log_freq=100, stop_score=200, max_score=500, min_score=-500, wandb_log=True)
+        a2c_train(env, agent, max_episodes=3000, log_freq=100, stop_score=200, 
+                  max_score=500, min_score=-300, wandb_log=True)
     else:
         # validate the trained agent - generate a gif
         agent.load_weights()  # load the best weights

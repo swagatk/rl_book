@@ -149,7 +149,6 @@ class A2CAgent:
         return actor_loss
 
         
-    @tf.function
     def train(self, states, actions, rewards, next_states, dones):
         states = np.array(states, dtype=np.float32)
         actions = np.array(actions, dtype=np.int32)

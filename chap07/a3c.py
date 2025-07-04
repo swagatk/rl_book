@@ -73,7 +73,6 @@ def worker(worker_id, global_weights_queue,
                 'group': 'expt_11',
                 'agent': 'A3C'
             }
-
         )
 
     episode = 0
@@ -97,6 +96,7 @@ def worker(worker_id, global_weights_queue,
             if DEBUG:
                 print(f"Worker {worker_id}: Using current weights after failed attempts")
             # Continue with current weights if queue is empty
+            continue
 
         state = env.reset()[0]
         episode_reward = 0

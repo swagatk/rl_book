@@ -17,7 +17,7 @@ import sys
 sys.path.append("/Share/rl_book/chap06") 
 from utils import validate
 
-train = False
+train = True
 
 ################
 # create actor & Critic models
@@ -40,7 +40,7 @@ def create_critic_model(obs_shape):
     return model
 
 ###################
-def ac_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_score=None, 
+def a2c_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_score=None, 
              stop_score=500, filename=None, wandb_log=False):
     print('Environment name: ', env.spec.id)
     print('RL Agent name:', agent.name)
@@ -147,13 +147,13 @@ if __name__ == '__main__':
     critic_net = create_critic_model(obs_shape)
 
     # create an RL agent
-    #agent = A2CAgent(obs_shape, action_size) 
     agent = A2CAgent(obs_shape, action_size, 
                       a_model=actor_net,  c_model=critic_net)
 
     if train:
         # train the RL agent on
-        ac_train(env, agent, max_episodes=1500, log_freq=100, stop_score=200, max_score=500, min_score=-500, wandb_log=True)
+        a2c_train(env, agent, max_episodes=2000, log_freq=100, 
+                 stop_score=200, max_score=500, min_score=-300, wandb_log=True)
     else:
         print("Validation with best model weights")
         # validate the trained agent - generate a gif

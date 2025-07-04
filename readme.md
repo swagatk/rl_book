@@ -83,4 +83,16 @@
 ## Chapter 07: Actor-Critic Models
 
 * Naive Actor-Critic Algorithm
+    - `./chap07/actor_critic.py`
 * A2C Algorithm
+    - `./chap07/a2c.py` : Uses discounted return to compute advantage
+    - `./chap07/a2c_v2.py` : uses standard bellman equation to compute advantage
+* A3C Algorithm
+    - `./chap07/a3c.py` : uses `a2c.py`
+    - `./chap07/a3c_v2.py`: uses `a2c_v2.py`
+* Problems:
+    - `./chap07/cp_ac.py` (CartPole-v1)
+    - `./chap07/cp_a2c.py`
+    - `./chap07/ll_ac.py` (LunarLander-v3)
+    - `./chap07/ll_a2c.py`
+    - `./chap07/ll_a3c.py`

@@ -188,7 +188,6 @@ class A2CAgent:
         actor_loss -= self.entropy_beta * tf.reduce_mean(entropy)
         return actor_loss
 
-    @tf.function
     def train(self, states, actions, rewards):
         states, actions, discnt_rewards = self.compute_discounted_rewards(states, actions, rewards)
         discnt_rewards = tf.convert_to_tensor(discnt_rewards, dtype=tf.float32)
@@ -196,11 +195,14 @@ class A2CAgent:
         with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
             values = self.critic(states)
             td_error = tf.math.subtract(discnt_rewards, values)
-            actor_loss = self.actor.compute_actor_loss(states, actions, td_error)
+            #actor_loss = self.actor.compute_actor_loss(states, actions, td_error)
+            actor_loss = self.compute_actor_loss(states, actions, td_error)
             critic_loss = tf.reduce_mean(tf.square(td_error))
 
+        # compute gradients
         actor_grads = tape1.gradient(actor_loss, self.actor.model.trainable_variables)
         critic_grads = tape2.gradient(critic_loss, self.critic.model.trainable_variables)
+        # apply gradients
         self.actor.optimizer.apply_gradients(zip(actor_grads, self.actor.model.trainable_variables))
         self.critic.optimizer.apply_gradients(zip(critic_grads, self.critic.model.trainable_variables))
         
