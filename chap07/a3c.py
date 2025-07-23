@@ -75,6 +75,8 @@ def worker(worker_id, global_weights_queue,
             }
         )
 
+    # collect experience and compute gradients
+    # for the local network
     episode = 0
     ep_scores = [] 
     best_score = -np.inf

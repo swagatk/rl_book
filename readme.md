@@ -96,3 +96,5 @@
     - `./chap07/ll_ac.py` (LunarLander-v3)
     - `./chap07/ll_a2c.py`
     - `./chap07/ll_a3c.py`
+
+## Chapter 08: Soft Actor-Critic Model

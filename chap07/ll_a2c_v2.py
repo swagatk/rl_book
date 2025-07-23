@@ -57,7 +57,9 @@ def a2c_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_s
                 'lr_a': agent.lr_a,
                 'lr_c': agent.lr_c,
                 'gamma': agent.gamma,
-                'agent': agent.name})
+                'agent': agent.name,
+                'network': '512-512-512',
+                })
 
     ep_scores = []
     best_score = -np.inf
@@ -82,7 +84,6 @@ def a2c_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_s
                 done = True
             if min_score is not None and ep_score <= min_score:
                 done = True
-
             if done: 
                 ep_scores.append(ep_score)
                 # train the agent
@@ -147,12 +148,13 @@ if __name__ == '__main__':
     critic_net = create_critic_model(obs_shape)
 
     # create an RL agent
-    agent = A2CAgent(obs_shape, action_size, 
-                      a_model=actor_net,  c_model=critic_net)
+    agent = A2CAgent(obs_shape, action_size)
+    # agent = A2CAgent(obs_shape, action_size, 
+    #                   a_model=actor_net,  c_model=critic_net)
 
     if train:
         # train the RL agent on
-        a2c_train(env, agent, max_episodes=2000, log_freq=100, 
+        a2c_train(env, agent, max_episodes=1500, log_freq=100, 
                  stop_score=200, max_score=500, min_score=-300, wandb_log=True)
     else:
         print("Validation with best model weights")

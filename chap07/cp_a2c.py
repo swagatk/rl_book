@@ -4,14 +4,14 @@ Solving CartPole problem using Advantage-Actor Critic (A2C) Algorithm
 '''
 
 import gymnasium as gym
-from chap07.a2c import A2CAgent
+from a2c import A2CAgent
 import wandb 
 import os
 import numpy as np
 import tensorflow as tf
 
 
-def ac_train(env, agent, max_episodes=10000, log_freq=50, max_score=None, min_score=None, 
+def ac_train(env, agent, max_episodes=2000, log_freq=50, max_score=None, min_score=None, 
              stop_score=500, filename=None, wandb_log=False):
     print('Environment name: ', env.spec.id)
     print('RL Agent name:', agent.name)

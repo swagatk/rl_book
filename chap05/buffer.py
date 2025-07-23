@@ -20,6 +20,33 @@ class ReplayBuffer():
         batch = self.buffer[indices]
         return batch
 
+    def sample_unpacked(self, obs_shape, action_shape, batch_size=24):
+ 
+        """
+        Returns a batch of experiences as a tuple of numpy arrays.
+        Input: 
+            batch_size: int
+            obs_shape: tuple, shape of the observation space
+        returns: (states, actions, rewards, next_states, dones)
+        """
+
+        mini_batch = self.sample(batch_size)
+        assert len(mini_batch[0]) == 5, "Each experience tuple must have 5 elements: (s,a,r,s',d)"
+        states = np.zeros((batch_size, *obs_shape))
+        next_states = np.zeros((batch_size, *obs_shape))
+        actions = np.zeros((batch_size, *action_shape))
+        rewards = np.zeros((batch_size, 1))
+        dones = np.zeros((batch_size, 1))
+
+        for i in range(len(mini_batch)):
+            states[i] = mini_batch[i][0]
+            actions[i] = mini_batch[i][1]
+            rewards[i] = mini_batch[i][2]
+            next_states[i] = mini_batch[i][3]
+            dones[i]  = mini_batch[i][4]
+
+        return states, actions, rewards, next_states, dones
+
     def __getitem__(self, index):
         if index >= 0 and index < self.capacity if self.full else self.idx:
             return self.buffer[index]

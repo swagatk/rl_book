@@ -7,12 +7,6 @@ import wandb
 import os
 import numpy as np
 
-CFG = dict(
-    lr_a = 1e-4,
-    lr_c = 1e-4, 
-    gamma = 0.99,
-    agent = 'ac',
-)
 
 def ac_train(env, agent, max_episodes=10000, log_freq=50, 
              stop_score=200, filename=None, wandb_log=False):
@@ -26,7 +20,13 @@ def ac_train(env, agent, max_episodes=10000, log_freq=50,
         file = open(filename, 'w')
 
     if wandb_log:
-        run = wandb.init(entity='swagatk', project=env.spec.id, config=CFG)
+        run = wandb.init(entity='swagatk', project=env.spec.id, 
+                         config={
+                                'lr_a': agent.lr_a,
+                                'lr_c': agent.lr_c,
+                                'gamma': agent.gamma,
+                                'agent': agent.name
+                         })
 
     ep_scores = []
     best_score = -np.inf

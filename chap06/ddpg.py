@@ -72,7 +72,6 @@ class Actor():
         return model
     
     def __call__(self, states, target=False):
-        states 
         if not target:
             pi = self.model(states)
         else:

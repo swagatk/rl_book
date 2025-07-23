@@ -72,9 +72,9 @@ class Critic():
 
     def _build_model(self): # returns V(s)
         sinput = tf.keras.layers.Input(shape=self.obs_shape)
-        x = tf.keras.layers.Dense(128, activation='relu')(sinput)
+        x = tf.keras.layers.Dense(512, activation='relu')(sinput)
         x = tf.keras.layers.Dense(256, activation='relu')(x)
-        x = tf.keras.layers.Dense(256, activation='relu')(x)
+        x = tf.keras.layers.Dense(128, activation='relu')(x)
         vout = tf.keras.layers.Dense(1, activation='relu')(x) # scalar output
         model = tf.keras.models.Model(inputs= sinput, outputs=vout, 
                                       name='critic')
