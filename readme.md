@@ -98,3 +98,12 @@
     - `./chap07/ll_a3c.py`
 
 ## Chapter 08: Soft Actor-Critic Model
+* SAC Algorithm
+    - `./chap08/sac.py`: Uses two target critic networks
+    - `./chap08/sac2.py`: Uses an additional value network and a target value network
+* Problems solved:
+    - `./chap08/pendu_sac.py`: Pendulum-v1
+    - `./chap08/ll_sac.py` : LunarLanderContinuous-v3
+    - `./chap08/fr_sac.py`: FetchReachDense-v3
+* Images:
+    - `./chap08/images/`: contains performance plots
