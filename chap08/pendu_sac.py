@@ -8,9 +8,13 @@ import wandb
 import os
 import sys
 import tensorflow as tf
-from sac2 import SACAgent
 
 SAC2 = True
+##############
+if SAC2:
+    from sac2 import SACAgent
+else:
+    from sac import SACAgent
 
 def train_sac_agent(env, agent, num_episodes=1500, 
                     max_score=None, min_score=None, 
@@ -45,7 +49,9 @@ def train_sac_agent(env, agent, num_episodes=1500,
     ep_scores = []
     best_score = -np.inf
     total_steps = 0
-    v_loss, a_loss, c_loss, alpha_loss = 0, 0, 0, 0
+    a_loss, c_loss, alpha_loss = 0, 0, 0 
+    if SAC2:
+        v_loss = 0
     for e in range(num_episodes):
         done = False
         truncated = False
@@ -53,7 +59,8 @@ def train_sac_agent(env, agent, num_episodes=1500,
         ep_score = 0
         ep_steps = 0
         c_losses, a_losses, alpha_losses = [], [], []
-        v_losses = []
+        if SAC2:    
+            v_losses = []
         while not done and not truncated:
             
             if np.isnan(state).any() or np.isinf(state).any():
@@ -84,23 +91,23 @@ def train_sac_agent(env, agent, num_episodes=1500,
                 done = True
 
             # train the agent
-            # if total_steps >= warmup_steps: # putting this condition leads to nan actions
-            #     #print('Training step:', total_steps)
-            if SAC2:
-                v_l, c_l, a_l, ap_l = agent.train()   
-                v_losses.append(v_l)
-            else:
-                c_l, a_l, ap_l = agent.train(update_per_step=update_per_step)   
-            c_losses.append(c_l)
-            a_losses.append(a_l)
-            alpha_losses.append(ap_l)            
+            if total_steps >= warmup_steps: # putting this condition leads to nan actions
+                #print('Training step:', total_steps)
+                if SAC2:
+                    v_l, c_l, a_l, ap_l = agent.train()   
+                    v_losses.append(v_l)
+                else:
+                    c_l, a_l, ap_l = agent.train(update_per_step=update_per_step)   
+                c_losses.append(c_l)
+                a_losses.append(a_l)
+                alpha_losses.append(ap_l)            
 
         # while loop ends here - end of episode
         ep_scores.append(ep_score)
 
-        c_loss = np.mean(c_losses) if c_losses else 0
-        a_loss = np.mean(a_losses) if a_losses else 0 
-        alpha_loss = np.mean(alpha_losses) if alpha_losses else 0
+        c_loss = np.mean(c_losses) 
+        a_loss = np.mean(a_losses) 
+        alpha_loss = np.mean(alpha_losses) 
         if SAC2:
             v_loss = np.mean(v_losses) 
 
@@ -163,13 +170,13 @@ if __name__ == "__main__":
     agent = SACAgent(obs_shape, action_shape,
                      action_upper_bound=action_upper_bound,
                      reward_scale=1.0,
-                     buffer_size=10000,
+                     buffer_size=1000000,
                      batch_size=256,
-                     max_grad_norm=10.0,)
+                     max_grad_norm=None)
 
 
     # train the agent
     train_sac_agent(env, agent, num_episodes=1500,
                     stop_score=-200,
                     update_per_step=1,
-                    wandb_log=False)
+                    wandb_log=True)

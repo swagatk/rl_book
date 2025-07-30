@@ -1,10 +1,13 @@
 """
 Deep Deterministic Policy Gradient (DDPG) Algorithm
 """
+import sys
 import tensorflow as tf
 import numpy as np
-from chap05.buffer import ReplayBuffer
-
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../chap05')))
+from buffer import ReplayBuffer
 
 # Noise Model
 class OUActionNoise:
@@ -143,7 +146,7 @@ class Critic:
         s_out = tf.keras.layers.Dense(32, activation='relu')(s_out)
         
         # action as input
-        a_input = tf.keras.layers.Input(shape=(action_size, ))
+        a_input = tf.keras.layers.Input(shape=(self.action_size, ))
         a_out = tf.keras.layers.Dense(32, activation='relu')(a_input)
         
         # concat [s, a]

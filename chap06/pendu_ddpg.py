@@ -7,7 +7,9 @@ import matplotlib.pyplot as plt
 from ddpg import DDPGAgent
 from utils import plot_datafile, validate
 
-def solve_problem(env, agent, max_episodes=500, train_freq=5, update_freq=20, filename=None):
+def solve_problem(env, agent, max_episodes=500, 
+                  train_freq=5, 
+                  update_freq=20, filename=None):
     if update_freq <= 10:
         tau_a = 0.005
         tau_c = 0.005
@@ -93,5 +95,5 @@ if __name__ == '__main__':
     plot_datafile('pendu_ddpg.txt', column_names=['episode', 'score', 'avg_score', 'avg50score', 'steps'], title='Pendulum-DDPG')
 
     # validate a model
-    agent.load_weights()
-    validate(env, agent, num_episodes=5, gif_file='pendulum_ddpg.gif', max_steps=200)
+    # agent.load_weights()
+    # validate(env, agent, num_episodes=5, gif_file='pendulum_ddpg.gif', max_steps=200)

@@ -44,7 +44,6 @@ class ReplayBuffer():
             rewards[i] = mini_batch[i][2]
             next_states[i] = mini_batch[i][3]
             dones[i]  = mini_batch[i][4]
-
         return states, actions, rewards, next_states, dones
 
     def __getitem__(self, index):

@@ -38,3 +38,5 @@ gif_file = "fetch_env_test.gif"
 imageio.mimwrite(gif_file, frames, duration=1000/60)
 print(f"GIF saved as {gif_file}")
 env.close()
+
+

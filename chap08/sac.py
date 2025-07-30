@@ -38,10 +38,14 @@ class Actor():
         
     def _build_model(self):
         inp = tf.keras.layers.Input(shape=self.obs_shape)
-        f = tf.keras.layers.Dense(256, activation='relu')(inp)
-        f = tf.keras.layers.Dense(256, activation='relu')(f)
-        mu = tf.keras.layers.Dense(self.action_size, activation=None)(f)
-        log_std = tf.keras.layers.Dense(self.action_size, activation=None)(f)
+        f = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(inp)
+        f = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        mu = tf.keras.layers.Dense(self.action_size, activation=None,
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        log_std = tf.keras.layers.Dense(self.action_size, activation=None,
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
         model = tf.keras.models.Model(inputs=inp, outputs=[mu, log_std], name='actor')
         model.summary()
         return model
@@ -62,8 +66,10 @@ class Actor():
             z = dist.sample()
 
         action = tf.tanh(z) * self.max_action 
+        squash = 1 - tf.math.pow(tf.tanh(z), 2)
+        squash = tf.clip_by_value(squash, 1e-6, 1.0)  # Avoid division by zero
         log_prob = dist.log_prob(z) 
-        log_prob -= tf.math.log(1 - tf.math.pow(action, 2) + 1e-6)
+        log_prob -= tf.math.log(squash)
         log_prob = tf.math.reduce_sum(log_prob,  axis=-1, keepdims=True)
         return action, log_prob
     
@@ -102,9 +108,12 @@ class Critic:
         state_input = tf.keras.layers.Input(shape=self.obs_shape)
         action_input = tf.keras.layers.Input(shape=self.action_shape)
         concat = tf.keras.layers.Concatenate()([state_input, action_input])
-        out = tf.keras.layers.Dense(256, activation='relu')(concat)
-        out = tf.keras.layers.Dense(256, activation='relu')(out)
-        out = tf.keras.layers.Dense(256, activation='relu')(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(concat)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
         net_out = tf.keras.layers.Dense(1)(out)
         model = tf.keras.Model(inputs=[state_input, action_input], outputs=net_out,
                                name='critic')
@@ -132,9 +141,9 @@ class Critic:
 
 class SACAgent:
     def __init__(self, obs_shape, action_shape, 
-                 actor_lr=0.0003, critic_lr=0.0003, 
-                 alpha_lr=1e-4, alpha=0.1,
-                 gamma=0.99, polyak=0.995, 
+                 actor_lr=1e-4, critic_lr=3e-4, 
+                 alpha_lr=3e-4, alpha=0.2,
+                 gamma=0.99, polyak=0.999, 
                  action_upper_bound=1.0,
                  buffer_size=100000, 
                  batch_size=256,
@@ -215,7 +224,7 @@ class SACAgent:
 
         with tf.GradientTape(persistent=True) as tape:
             # predict next_actions and log_probs for next states
-            next_actions, next_log_probs = self.actor.sample_action(next_states)
+            next_actions, next_log_probs = self.actor.sample_action(next_states) 
 
             # compute target Q-values using the target critic networks
             target_q1 = self.target_critic_1(next_states, next_actions)
@@ -255,7 +264,7 @@ class SACAgent:
         mean_c_loss = (critic_1_loss + critic_2_loss) / 2.0
         return mean_c_loss
 
-    def update_actor(self, states, actions):
+    def update_actor(self, states):
         """
         Update the actor network
         inputs are tensors
@@ -264,12 +273,12 @@ class SACAgent:
 
         with tf.GradientTape(persistent=True) as tape:
             # Sample actions and log probabilities for current states
-            actions, log_probs = self.actor.sample_action(states)
+            new_actions, log_probs = self.actor.sample_action(states)
 
             # Compute Q-values for the sampled actions
-            q1 = self.critic_1(states, actions)
-            q2 = self.critic_2(states, actions)
-            min_q = tf.minimum(q1, q2)
+            q1_new = self.critic_1(states, new_actions)
+            q2_new = self.critic_2(states, new_actions)
+            min_q = tf.minimum(q1_new, q2_new)
 
             # Actor loss is the mean of the Q-values minus the entropy term
             # Actor loss (maximize soft Q-value, incorporating entropy)
@@ -300,8 +309,8 @@ class SACAgent:
         
         return actor_loss, alpha_loss
 
-    #@tf.function
-    def train(self, update_per_step=1):
+    def train(self, update_per_step=1, critic_update_steps=1):
+        # do not use @tf.function decorator - it leads to issues with replay buffer sampling
         if len(self.buffer) < self.batch_size:
             return 0, 0, 0
 
@@ -310,8 +319,8 @@ class SACAgent:
 
             # Sample a batch of transitions from the replay buffer
             states, actions, rewards, next_states, dones = self.buffer.sample_unpacked(self.obs_shape, 
-                                                                                       self.action_shape,
-                                                                                       self.batch_size)
+                                                                                        self.action_shape,
+                                                                                        self.batch_size)
 
             states = tf.convert_to_tensor(states, dtype=tf.float32)
             actions = tf.convert_to_tensor(actions, dtype=tf.float32)       
@@ -319,22 +328,30 @@ class SACAgent:
             next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
             dones = tf.convert_to_tensor(dones, dtype=tf.float32)
 
-            # Update Critic networks
-            critic_loss = self.update_critic(states, actions, rewards, next_states, dones)
-            actor_loss, alpha_loss = self.update_actor(states, actions)
+            # Update Actor network
+            actor_loss, alpha_loss = self.update_actor(states)
 
-            # Update target networks
-            self.update_target_networks()
+            a_losses.append(actor_loss.numpy())
+            alpha_losses.append(alpha_loss.numpy())
 
-            c_losses.append(critic_loss)
-            a_losses.append(actor_loss)
-            alpha_losses.append(alpha_loss)
+            critic_losses = []
+            for _ in range(critic_update_steps):
+                # Update Critic networks
+                # Note: we can update critic networks multiple times per actor update
+                # to stabilize training
+                critic_loss = self.update_critic(states, actions, rewards, next_states, dones)
 
-        mean_critic_loss = tf.reduce_mean(c_losses)
-        mean_actor_loss = tf.reduce_mean(a_losses)
-        mean_alpha_loss = tf.reduce_mean(alpha_losses)
+                # Update target networks
+                self.update_target_networks()
+                critic_losses.append(critic_loss)
+            mean_critic_loss = tf.reduce_mean(critic_losses)
+            c_losses.append(mean_critic_loss.numpy())
 
-        return mean_critic_loss, mean_actor_loss, mean_alpha_loss
+        # Return the average losses
+        mean_critic_loss = np.mean(c_losses)
+        actor_loss = np.mean(a_losses)
+        alpha_loss = np.mean(alpha_losses)
+        return critic_loss, actor_loss, alpha_loss
 
     def save_weights(self, filename: str):
         if filename.lower().endswith(".weights.h5"):

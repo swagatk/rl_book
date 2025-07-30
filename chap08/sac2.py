@@ -20,7 +20,8 @@ class Actor():
         self.action_size = action_shape[0]
         self.lr = learning_rate
         self.max_action = action_upper_bound
-        self.noise = 1e-6  # Small value to avoid division by zero
+        self.max_log_std = tf.constant(2.0, dtype=tf.float32)  # Maximum log standard deviation
+        self.min_log_std = tf.constant(-20.0, dtype=tf.float32)
 
         if model is None:
             self.model = self._build_model()
@@ -31,22 +32,27 @@ class Actor():
         
     def _build_model(self):
         inp = tf.keras.layers.Input(shape=self.obs_shape)
-        f = tf.keras.layers.Dense(256, activation='relu')(inp)
-        f = tf.keras.layers.Dense(256, activation='relu')(f)
-        mu = tf.keras.layers.Dense(self.action_size, activation=None)(f)
-        sigma = tf.keras.layers.Dense(self.action_size, activation=None)(f)
-        model = tf.keras.models.Model(inputs=inp, outputs=[mu, sigma], name='actor')
+        f = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(inp)
+        f = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        mu = tf.keras.layers.Dense(self.action_size, activation=None,
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        log_std = tf.keras.layers.Dense(self.action_size, activation=None,
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        model = tf.keras.models.Model(inputs=inp, outputs=[mu, log_std], name='actor')
         model.summary()
         return model
     
     def __call__(self, states):
-        mean, std = self.model(states)
+        mean, log_std = self.model(states)
         # Apply constraints to log_std
-        std = tf.clip_by_value(std, self.noise, 1.0)
-        return mean, std
+        log_std = tf.clip_by_value(log_std, self.min_log_std, self.max_log_std)
+        return mean, log_std
 
     def sample_action(self, state, reparameterize=False):
-        mean, std = self(state)
+        mean, log_std = self(state)
+        std = tf.exp(log_std)  # Convert log_std to std
         dist = tfp.distributions.Normal(mean, std)
 
         if reparameterize: # Reparameterization trick
@@ -55,9 +61,11 @@ class Actor():
             z = dist.sample()
 
         action = tf.tanh(z) * self.max_action  # Scale action to the range [-max_action, max_action]
-        log_prob = dist.log_prob(z) 
-        log_prob -= tf.math.log(1 - tf.math.pow(action, 2) + self.noise)
-        log_prob = tf.math.reduce_sum(log_prob, axis=1, keepdims=True)
+        squash = 1 - tf.math.pow(tf.tanh(z), 2)  # Squash factor for log probability
+        squash = tf.clip_by_value(squash, 1e-6, 1.0)  # Avoid division by zero
+        log_prob = dist.log_prob(z)  
+        log_prob -= tf.math.log(squash)
+        log_prob = tf.math.reduce_sum(log_prob, axis=-1, keepdims=True)
         return action, log_prob
     
     
@@ -95,12 +103,15 @@ class Critic:
         state_input = tf.keras.layers.Input(shape=self.obs_shape)
         action_input = tf.keras.layers.Input(shape=self.action_shape)
         concat = tf.keras.layers.Concatenate()([state_input, action_input])
-        out = tf.keras.layers.Dense(256, activation='relu')(concat)
-        out = tf.keras.layers.Dense(256, activation='relu')(out)
-        out = tf.keras.layers.Dense(256, activation='relu')(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(concat)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
         net_out = tf.keras.layers.Dense(1)(out)
-        model = tf.keras.Model(inputs=[state_input, action_input], outputs=net_out,
-                               name='critic')
+        model = tf.keras.Model(inputs=[state_input, action_input], 
+                               outputs=net_out, name='critic')
         model.summary()
         return model
 
@@ -142,9 +153,12 @@ class ValueNetwork():
 
     def _build_net(self):
         inp = tf.keras.layers.Input(shape=self.obs_shape)
-        out = tf.keras.layers.Dense(256, activation='relu')(inp)
-        out = tf.keras.layers.Dense(256, activation='relu')(out)
-        out = tf.keras.layers.Dense(256, activation='relu')(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(inp)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
         net_out = tf.keras.layers.Dense(1)(out)
         model = tf.keras.Model(inputs=inp, outputs=net_out, name='value_network')
         model.summary()
@@ -179,10 +193,10 @@ class SACAgent:
                  reward_scale=1.0,
                  buffer_size=100000,
                  batch_size=256,
-                 lr_a=1e-3,
-                 lr_c=1e-4,
-                 lr_alpha=1e-4,
-                 polyak = 0.995,
+                 lr_a=1e-4,
+                 lr_c=3e-4,
+                 lr_alpha=3e-4,
+                 polyak = 0.999,
                  gamma = 0.99,
                  alpha=0.2,
                  max_grad_norm=None,
@@ -220,16 +234,16 @@ class SACAgent:
         self.target_value_network.model.set_weights(self.value_network.model.get_weights())
 
         # Initialize alpha (temperature parameter)
-        self.alpha = tf.Variable(alpha, trainable=True, dtype=tf.float32)
+        self.log_alpha = tf.Variable(tf.math.log(alpha), trainable=True, dtype=tf.float32)
         self.alpha_optimizer = tf.keras.optimizers.Adam(learning_rate=self.alpha_lr)
 
 
-    def choose_action(self, state, reparameterize=False):
+    def choose_action(self, state, evaluate=False):
         """
         Chooses an action based on the current state
         """
         state = tf.expand_dims(tf.convert_to_tensor(state, dtype=tf.float32), axis=0)   
-        action, _ = self.actor.sample_action(state, reparameterize)
+        action, _ = self.actor.sample_action(state, reparameterize= not evaluate)
         action = tf.squeeze(action, axis=0)  # Remove batch dimension
         return action.numpy()
     
@@ -253,7 +267,7 @@ class SACAgent:
             next_q1 = self.critic_1(next_states, next_actions)
             next_q2 = self.critic_2(next_states, next_actions)
             next_q = tf.minimum(next_q1, next_q2)
-            value_target = next_q - self.alpha * next_log_probs
+            value_target = next_q - tf.exp(self.log_alpha) * next_log_probs
             value = self.value_network(states)
             value_loss = tf.reduce_mean(tf.square(value - value_target))
 
@@ -266,7 +280,7 @@ class SACAgent:
             # Apply gradients to the value network
             self.value_network.optimizer.apply_gradients(zip(value_grads, \
                                             self.value_network.model.trainable_variables))
-        return value_loss.numpy() 
+        return value_loss 
 
     def update_critic(self, states, actions, rewards, next_states, dones):
         with tf.GradientTape(persistent=True) as tape:
@@ -290,7 +304,7 @@ class SACAgent:
         if critic_2_grads is not None:
             self.critic_2.optimizer.apply_gradients(zip(critic_2_grads, \
                                             self.critic_2.model.trainable_variables))
-        return critic_1_loss.numpy(), critic_2_loss.numpy()
+        return critic_1_loss, critic_2_loss
 
     def update_actor(self, states):
         with tf.GradientTape(persistent=True) as tape:
@@ -298,11 +312,11 @@ class SACAgent:
             q1_new = self.critic_1(states, new_actions)
             q2_new = self.critic_2(states, new_actions)
             q_new = tf.minimum(q1_new, q2_new)
-            actor_loss = tf.reduce_mean(self.alpha * log_probs - q_new)
-            alpha_loss = tf.reduce_mean(-tf.math.log(self.alpha) * (log_probs + self.target_entropy))    
+            actor_loss = tf.reduce_mean(tf.exp(self.log_alpha) * log_probs - q_new)
+            alpha_loss = tf.reduce_mean(tf.negative(self.log_alpha) * (log_probs + self.target_entropy))    
 
         actor_grads = tape.gradient(actor_loss, self.actor.model.trainable_variables)
-        alpha_grads = tape.gradient(alpha_loss, [self.alpha])
+        alpha_grads = tape.gradient(alpha_loss, [self.log_alpha])
 
         if self.max_grad_norm is not None:
             actor_grads, _ = tf.clip_by_global_norm(actor_grads, self.max_grad_norm)
@@ -312,40 +326,57 @@ class SACAgent:
             self.actor.optimizer.apply_gradients(zip(actor_grads, \
                                             self.actor.model.trainable_variables))
         if alpha_grads is not None:
-            self.alpha_optimizer.apply_gradients(zip(alpha_grads, [self.alpha]))
-        return actor_loss.numpy(), alpha_loss.numpy()
+            self.alpha_optimizer.apply_gradients(zip(alpha_grads, [self.log_alpha]))
+        return actor_loss, alpha_loss
 
-    @tf.function
-    def train(self):
+    def train(self, update_per_step=1):
         """
         Train the agent using a batch of transitions from the replay buffer
+        do not use @tf.function decorator - it leads to issues with replay buffer sampling
         """
+
         if len(self.buffer) < self.batch_size:
-            return 0, 0, 0, 0 
-        states, actions, rewards, next_states, dones = self.buffer.sample_unpacked(self.obs_shape,
-                                                                                   self.action_shape,
-                                                                                   self.batch_size)
+            return 0, 0, 0, 0
+        
+        v_losses, c_losses, a_losses, alpha_losses = [], [], [], []
+        for _ in range(update_per_step):
 
-        # Convert to tensors
-        states = tf.convert_to_tensor(states, dtype=tf.float32)
-        actions = tf.convert_to_tensor(actions, dtype=tf.float32)
-        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
-        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
-        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+            # Sample a batch of transitions from the replay buffer
+            states, actions, rewards, next_states, dones = self.buffer.sample_unpacked(self.obs_shape,
+                                                                                    self.action_shape,
 
-        # Update value network
-        value_loss = self.update_value_network(states, next_states)
+                                                                                    self.batch_size)
+            # Convert to tensors
+            states = tf.convert_to_tensor(states, dtype=tf.float32)
+            actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+            rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+            next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+            dones = tf.convert_to_tensor(dones, dtype=tf.float32)
 
-        # Update critic networks
-        critic_1_loss, critic_2_loss = self.update_critic(states, actions, rewards, next_states, dones)
+            # Update value network
+            value_loss = self.update_value_network(states, next_states)
 
-        critic_loss = np.mean([critic_1_loss, critic_2_loss]) 
+            # Update critic networks
+            critic_1_loss, critic_2_loss = self.update_critic(states, actions, rewards, next_states, dones)
 
-        # Update actor network
-        actor_loss, alpha_loss = self.update_actor(states)
+            critic_loss = (critic_1_loss + critic_2_loss)/2.0 
 
-        # Update target networks
-        self.update_target_networks()
+            # Update actor network
+            actor_loss, alpha_loss = self.update_actor(states)
+
+            v_losses.append(value_loss.numpy())
+            c_losses.append(critic_loss.numpy())
+            a_losses.append(actor_loss.numpy())
+            alpha_losses.append(alpha_loss.numpy())
+
+            # Update target networks
+            self.update_target_networks()
+
+        # Return the average losses
+        value_loss = np.mean(v_losses)
+        critic_loss = np.mean(c_losses)
+        actor_loss = np.mean(a_losses)
+        alpha_loss = np.mean(alpha_losses)
         return value_loss, critic_loss, actor_loss, alpha_loss
 
     def save_weights(self, filename: str):

@@ -45,6 +45,8 @@ def train_sac_agent(env, agent, num_episodes=1500,
     best_score = -np.inf
     total_steps = 0
     a_loss, c_loss, alpha_loss = 0, 0, 0
+    if SAC2:
+        v_loss = 0
     for e in range(num_episodes):
         done = False
         truncated = False
@@ -52,6 +54,8 @@ def train_sac_agent(env, agent, num_episodes=1500,
         ep_score = 0
         ep_steps = 0
         c_losses, a_losses, alpha_losses = [], [], []
+        if SAC2:
+            v_losses = []
         while not done and not truncated:
             if total_steps < warmup_steps:
                 action = env.action_space.sample()
@@ -76,12 +80,14 @@ def train_sac_agent(env, agent, num_episodes=1500,
             # train the agent
             if total_steps >= warmup_steps:
                 if SAC2:
-                    _, cl, al, alphal = agent.train()   
+                    vl, cl, al, alphal = agent.train()   
                 else:
                    cl, al, alphal = agent.train(update_per_step=update_per_step)   
                 c_losses.append(cl)
                 a_losses.append(al)
                 alpha_losses.append(alphal)            
+                if SAC2:
+                    v_losses.append(vl)
 
 
         # while loop ends here
@@ -89,6 +95,8 @@ def train_sac_agent(env, agent, num_episodes=1500,
         c_loss = np.mean(c_losses) 
         a_loss = np.mean(a_losses) 
         alpha_loss = np.mean(alpha_losses)
+        if SAC2:
+            v_loss = np.mean(v_losses)
 
 
         if filename is not None:
@@ -111,6 +119,7 @@ def train_sac_agent(env, agent, num_episodes=1500,
                 'mean_score': np.mean(ep_scores),
                 'best_score': best_score,
                 'alpha_loss': alpha_loss,
+                'v_loss': v_loss if SAC2 else None
             })
 
         if ep_score > best_score:
@@ -146,8 +155,10 @@ if __name__ == "__main__":
 
     # Initialize the SAC agent
     agent = SACAgent(obs_shape, action_shape,
+                    buffer_size=1000000,
+                    batch_size=256,
                      action_upper_bound=action_upper_bound,
-                     reward_scale=2.0)
+                     reward_scale=1.0)
 
     # train the agent
     train_sac_agent(env, agent, num_episodes=1500,

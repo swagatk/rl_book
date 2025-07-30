@@ -22,17 +22,30 @@ import imageio
 SAC2 = False
 EXT_MODEL = False
 EVAL = False
+REPRODUCIBILITY = True
 ####################
 if SAC2:
     from sac2 import SACAgent
 else:
     from sac import SACAgent
 
+################################
+# Set random seeds for reproducibility
+if REPRODUCIBILITY:
+    import random
+    seed = 42
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    print(f'Setting random seed to {seed} for reproducibility.')
+#######################################
 # create actor & Critic models
 def create_actor_model(obs_shape, n_actions):
     s_input = tf.keras.layers.Input(shape=obs_shape)
-    x = tf.keras.layers.Dense(256, activation='relu')(s_input)
-    x = tf.keras.layers.Dense(256, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
     x = tf.keras.layers.Dense(256, activation='relu')(x)
     mu = tf.keras.layers.Dense(n_actions, activation=None)(x)
     sigma = tf.keras.layers.Dense(n_actions, activation=None)(x)
@@ -44,8 +57,8 @@ def create_critic_model(obs_shape, action_shape):
     s_input = tf.keras.layers.Input(shape=obs_shape)
     a_input = tf.keras.layers.Input(shape=action_shape)
     x = tf.keras.layers.Concatenate()([s_input, a_input])
-    x = tf.keras.layers.Dense(256, activation='relu')(s_input)
-    x = tf.keras.layers.Dense(256, activation='relu')(x)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
     x = tf.keras.layers.Dense(256, activation='relu')(x)
     q = tf.keras.layers.Dense(1, activation=None)(x)
     model = tf.keras.models.Model([s_input, a_input], q, name='critic_network')
@@ -54,8 +67,8 @@ def create_critic_model(obs_shape, action_shape):
 
 def create_value_network(obs_shape):
     s_input = tf.keras.layers.Input(shape=obs_shape)
-    x = tf.keras.layers.Dense(256, activation='relu')(s_input)
-    x = tf.keras.layers.Dense(256, activation='relu')(x)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
     x = tf.keras.layers.Dense(256, activation='relu')(x)
     v = tf.keras.layers.Dense(1, activation=None)(x)
     model = tf.keras.models.Model(s_input, v, name='value_network')
@@ -69,6 +82,7 @@ def train_sac_agent(env, agent, num_episodes=1500,
                     warmup_steps=1000,
                     ep_max_steps=None,
                     update_per_step=1,
+                    critic_update_steps=1,
                     log_freq=100,
                     train_freq=1,
                     filename=None, wandb_log=False):
@@ -90,6 +104,8 @@ def train_sac_agent(env, agent, num_episodes=1500,
                 'gamma': agent.gamma,
                 'agent': agent.name,
                 'polyak': agent.polyak,
+                'external_model': EXT_MODEL,
+                'max_grad_norm': agent.max_grad_norm,
                 })
 
     ep_scores = []
@@ -136,10 +152,12 @@ def train_sac_agent(env, agent, num_episodes=1500,
             # train the agent
             if total_steps >= warmup_steps and total_steps % train_freq == 0:
                 if SAC2:
-                    vl, cl, al, alphal = agent.train()   
+                    vl, cl, al, alphal = agent.train(update_per_step=update_per_step)   
                     v_losses.append(vl)
                 else:
-                   cl, al, alphal = agent.train(update_per_step=update_per_step)   
+                   cl, al, alphal = agent.train(
+                        update_per_step=update_per_step, 
+                        critic_update_steps=critic_update_steps)   
                 c_losses.append(cl)
                 a_losses.append(al)
                 alpha_losses.append(alphal)            
@@ -277,9 +295,9 @@ if __name__ == "__main__":
         # Initialize the SAC agent
         agent = SACAgent(obs_shape, action_shape,
                         action_upper_bound=action_upper_bound,
-                        reward_scale=5.0,
+                        reward_scale=1.0,
                         buffer_size=1000000,
-                        batch_size=256,
+                        batch_size=512,
                         actor_model=actor_net,
                         critic_model=critic_net,
                         value_model=value_net,
@@ -288,9 +306,9 @@ if __name__ == "__main__":
         # Initialize the SAC agent
         agent = SACAgent(obs_shape, action_shape,
                         action_upper_bound=action_upper_bound,
-                        reward_scale=5.0,
+                        reward_scale=1.0,
                         buffer_size=1000000,
-                        batch_size=256,
+                        batch_size=512,
                         actor_model=actor_net,
                         critic_model=critic_net,
                         max_grad_norm=None,)
@@ -307,4 +325,4 @@ if __name__ == "__main__":
         # load the weights
         agent.load_weights(filename='fr_sac.weights.h5')
         # validate the agent
-        validate(env, agent, num_episodes=10, max_steps=1000, gif_file='fr_sac.gif')
+        validate(env, agent, num_episodes=10, max_steps=100, gif_file='fr_sac.gif')
