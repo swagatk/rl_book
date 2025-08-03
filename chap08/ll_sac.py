@@ -7,9 +7,13 @@ import wandb
 import os
 import sys
 import tensorflow as tf
-from sac2 import SACAgent
 
 SAC2 = True
+
+if SAC2:
+    from sac2 import SACAgent
+else:
+    from sac import SACAgent
 
 def train_sac_agent(env, agent, num_episodes=1500, 
                     max_score=500, min_score=-300, 
@@ -17,6 +21,7 @@ def train_sac_agent(env, agent, num_episodes=1500,
                     warmup_steps=1000,
                     ep_max_steps=1000,
                     update_per_step=1,
+                    critic_update_steps=1,
                     log_freq=100,
                     filename=None, wandb_log=False):
     
@@ -82,7 +87,10 @@ def train_sac_agent(env, agent, num_episodes=1500,
                 if SAC2:
                     vl, cl, al, alphal = agent.train()   
                 else:
-                   cl, al, alphal = agent.train(update_per_step=update_per_step)   
+                    cl, al, alphal = agent.train(
+                        update_per_step=update_per_step,
+                        critic_update_steps=critic_update_steps)   
+
                 c_losses.append(cl)
                 a_losses.append(al)
                 alpha_losses.append(alphal)            
@@ -158,11 +166,16 @@ if __name__ == "__main__":
                     buffer_size=1000000,
                     batch_size=256,
                      action_upper_bound=action_upper_bound,
-                     reward_scale=1.0)
+                     reward_scale=1.0,
+                     lr_a=0.001,
+                     lr_c=0.0001, # 1e-4
+                     lr_alpha=0.0001, # 1e-4 
+                     polyak=0.995,)
 
     # train the agent
     train_sac_agent(env, agent, num_episodes=1500,
                     max_score=500, min_score=-300,
                     stop_score=200,
                     update_per_step=1,
+                    critic_update_steps=3,
                     wandb_log=True)

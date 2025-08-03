@@ -141,9 +141,9 @@ class Critic:
 
 class SACAgent:
     def __init__(self, obs_shape, action_shape, 
-                 actor_lr=1e-4, critic_lr=3e-4, 
-                 alpha_lr=3e-4, alpha=0.2,
-                 gamma=0.99, polyak=0.999, 
+                 lr_a=1e-4, lr_c=3e-4, 
+                 lr_alpha=1e-4, alpha=0.2,
+                 gamma=0.99, polyak=0.995, 
                  action_upper_bound=1.0,
                  buffer_size=100000, 
                  batch_size=256,
@@ -158,9 +158,9 @@ class SACAgent:
         self.polyak = polyak # Polyak averaging coefficient
         self.batch_size = batch_size
         self.buffer_size = buffer_size
-        self.actor_lr = actor_lr
-        self.critic_lr = critic_lr
-        self.alpha_lr = alpha_lr
+        self.actor_lr = lr_a
+        self.critic_lr = lr_c
+        self.alpha_lr = lr_alpha
         self.reward_scale = reward_scale
         self.max_grad_norm = max_grad_norm
         self.name = 'SAC'
@@ -343,12 +343,13 @@ class SACAgent:
 
                 # Update target networks
                 self.update_target_networks()
+
                 critic_losses.append(critic_loss)
             mean_critic_loss = tf.reduce_mean(critic_losses)
             c_losses.append(mean_critic_loss.numpy())
 
         # Return the average losses
-        mean_critic_loss = np.mean(c_losses)
+        critic_loss = np.mean(c_losses)
         actor_loss = np.mean(a_losses)
         alpha_loss = np.mean(alpha_losses)
         return critic_loss, actor_loss, alpha_loss

@@ -10,7 +10,8 @@
 
 ## SAC versus SAC2
 
-* SAC2 with a separate value network provides better performance compared to SAC. 
+* SAC2 uses a separate value network and a target value network in addition to using two critic networks.  
+* SAC uses two critic network and two target critic networks.
 
 | Environment / Plot | Comments |
 | ------------------ | -------- |
@@ -18,3 +19,5 @@
 | ![Reach](./images/frd_sac_comp.png) | Both SAC2 & SAC have similar performance |
 | Pendulum-v1 | 
 | ![Pendulum](./images/pendulum_v1_sac_comp.png) | SAC2 performs slightly better than SAC |
+| LunarLanderContinuous-v3 |
+| ![lunar](./images/lunarlandercont_v3_sac_comp.png) | SAC2 performs better than SAC |

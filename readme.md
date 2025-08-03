@@ -98,6 +98,9 @@
     - `./chap07/ll_a3c.py`
 
 ## Chapter 08: Soft Actor-Critic Model
+* Dependencies:
+    - `pip install gymnasium-robotics`
+
 * SAC Algorithm
     - `./chap08/sac.py`: Uses two target critic networks
     - `./chap08/sac2.py`: Uses an additional value network and a target value network
