@@ -1,0 +1,160 @@
+\ProvidesFile{custombook}
+%%%%%%%%%%%%%%%%%%%%%
+%% creating subtitles in the titlepage
+ \makeatletter
+\def\subtitle#1{\gdef\@subtitle{#1}}
+\def\maketitle{\begin{titlepage}%
+  \let\footnotesize\small
+  \let\footnoterule\relax
+  \let \footnote \thanks
+  \null\vfil
+  \vskip 60\p@
+  \begin{center}%
+    {\Huge \@title \par}%
+    \vskip 1.5em% Added this
+    {\Large \@subtitle \par}% and this
+    \vskip 3em%
+    {\large
+     \lineskip .75em%
+      \begin{tabular}[t]{c}%
+        \@author
+      \end{tabular}\par}%
+      \vskip 1.5em%
+    {\large \@date \par}%       % Set date in \large size.
+  \end{center}\par
+  \@thanks
+  \vfil\null
+  \end{titlepage}%
+  \setcounter{footnote}{0}%
+  \global\let\thanks\relax
+  \global\let\maketitle\relax
+  \global\let\@thanks\@empty
+  \global\let\@author\@empty
+  \global\let\@date\@empty
+  \global\let\@title\@empty
+  \global\let\title\relax
+  \global\let\author\relax
+  \global\let\date\relax
+  \global\let\and\relax
+}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%5
+%%% Python code formatting
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%5
+\usepackage{pythontex}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}  
+
+\def\sxdef#1{\expandafter\xdef\csname#1\endcsname}
+\def\sdef#1{\expandafter\def\csname#1\endcsname}
+{\lccode`\?=`\p \lccode`\!=`\t  \lowercase{\gdef\ignorept#1?!{#1}}}
+\def\ptdim#1{\expandafter\ignorept\the\dimen#1 }
+
+\newcount\spacenum  \newcount\linenum  \newcount\linenumA  \newcount\tmpnum
+
+\def\Lcountspaces#1{\spacenum=0 \ifx\end#1\end\else \LcountspacesA#1\end\fi}
+\def\LcountspacesA#1{%
+   \ifx#1\fspace \advance\spacenum by1 \let\next=\LcountspacesA
+   \else \let\next=\LcountspacesB \fi
+   \ifx#1\end \let\next=\relax \fi
+   \next
+}
+\def\LcountspacesB#1\end{}
+\expandafter\def\expandafter\fspace\expandafter{\csname FV@Space\endcsname}
+
+\def\Lbegin{\global\linenum=0 \gdef\Llist{}}
+
+\def\Lformat#1{%
+   \global\advance\linenum by1
+   \sxdef{L:\the\spacenum}{\the\linenum}%
+   \tmpnum=\spacenum \gdef\Llist{}\let\Ldraw=\relax
+   \loop
+      \advance\tmpnum by-1
+      \ifnum\tmpnum>-1
+         \expandafter\ifx\csname L:\the\tmpnum\endcsname \relax \else
+            \advance\spacenum by-\tmpnum
+            \linenumA=\linenum  
+            \advance\linenumA by-\csname L:\the\tmpnum\endcsname
+            \xdef\Llist{\Ldraw{\the\spacenum}{\the\linenumA}\Llist}%
+            \spacenum=\tmpnum
+         \fi
+   \repeat  
+   \csname FV@ObeyTabs\endcsname{#1}}
+
+\def\Lbox#1{\hbox to\hsize{\rlap{\box#1}%
+  \kern\csname @totalleftmargin\endcsname \kern\csname FV@XLeftMargin\endcsname
+  \setbox0=\hbox{\csname FV@LeftListFrame\endcsname}\kern\wd0
+  \tmpnum=0 \Llist\hss}}
+
+\def\Ldraw{\ifnum\tmpnum<\spacenum \expandafter\LdrawI \else \expandafter\LdrawL\fi}
+\def\LdrawL#1#2{%
+   \dimen0=.5em \dimen0=#1\dimen0 \advance\dimen0 by-.4em
+   \dimen1=1.4ex
+   \dimen2=.5ex 
+   \pdfliteral{q \Lshape\space .9963 0 0 .9963 \ptdim2 \ptdim2 cm
+      \ptdim0 0 m 0 0 l 0 \ptdim1 l S Q}%
+   \LdrawE{#1}}
+
+\def\LdrawI#1#2{%
+   \dimen0=-.85ex
+   \dimen1=\normalbaselineskip
+   \dimen2=.5ex
+   \pdfliteral{q \Lshape\space .9963 0 0 .9963 \ptdim2 \ptdim0 cm
+      0 0 m 0 \ptdim1 l S Q}%
+   \LdrawE{#1}}
+
+\def\LdrawE#1{\dimen0=.5em \kern#1\dimen0 \advance\tmpnum by#1 }
+
+\csname define@key\endcsname{FV}{indent}{\csname FV@indent@#1\endcsname}
+\sdef{FV@indent@L}{\let\FancyVerbFormatLine=\Lformat}
+
+\def\Lshape{1 g .5 G 1 w 1 j 1 J} % .5 gray 1bp width rounded ends, rounded corner
+
+%%%%%%% re-definition of internal macros from fancyvrb.sty
+{\makeatletter
+\gdef\FV@ListProcessLine@i#1{\Lcountspaces{#1}%  <--- added by P.O.
+  \hbox{%
+    \ifvoid\@labels\else
+      \hbox to \z@{\kern\@totalleftmargin\box\@labels\hss}%
+    \fi
+    \FV@ListProcessLine{#1}}%
+  \let\FV@ProcessLine\FV@ListProcessLine@ii}
+\gdef\FV@ListProcessLine@ii#1{\Lcountspaces{#1}%  <--- added by P.O. 
+  \setbox\@tempboxa=\FV@ListProcessLine{#1}%
+  \let\FV@ProcessLine\FV@ListProcessLine@iii}
+\gdef\FV@ListProcessLine@iii#1{\Lcountspaces{#1}% <--- added by P.O.
+  {\advance\interlinepenalty\clubpenalty\penalty\interlinepenalty}%  
+  \Lbox\@tempboxa                              % <--- Lbox by P.O.
+  \setbox\@tempboxa=\FV@ListProcessLine{#1}% 
+  \let\FV@ProcessLine\FV@ListProcessLine@iv}
+\gdef\FV@ListProcessLine@iv#1{\Lcountspaces{#1}%  <--- added by P.O. 
+  \penalty\interlinepenalty
+  \Lbox\@tempboxa                              % <--- Lbox by P.O.
+  \setbox\@tempboxa=\FV@ListProcessLine{#1}}%
+\gdef\FV@ListProcessLastLine{\spacenum=0 %     % <--- added by P.O.  
+  \ifx\FV@ProcessLine\FV@ListProcessLine@iv
+    {\advance\interlinepenalty\widowpenalty\penalty\interlinepenalty}%
+    \Lbox\@tempboxa                            % <--- Lbox by P.O.
+  \else
+    \ifx\FV@ProcessLine\FV@ListProcessLine@iii
+      {\advance\interlinepenalty\widowpenalty
+        \advance\interlinepenalty\clubpenalty
+        \penalty\interlinepenalty}%
+      \Lbox\@tempboxa                         % <--- Lbox by P.O.
+    \else
+      \ifx\FV@ProcessLine\FV@ListProcessLine@i
+        \FV@Error{Empty verbatim environment}{}%
+         \FV@ProcessLine{}%
+      \fi
+    \fi
+  \fi}
+\gdef\FVB@Verbatim{\Lbegin\FV@VerbatimBegin\FV@Scan} % <--- Lbegin added by P.O.
+\gdef\@begin@pygments@hook{\Lbegin}
+}
+%%%%%%%%%%% end of re-definition
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%55
+\makeatother
+
+

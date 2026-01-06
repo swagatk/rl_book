@@ -1,0 +1,129 @@
+\documentclass[
+   listof=totoc,
+   bibliography=totoc,
+   a4paper,
+   fontsize=11pt,
+   twoside=true]{scrbook}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[english]{babel} %% remove
+\usepackage{blindtext}      %% remove
+\usepackage{custombook}
+\usepackage{amsmath,mathrsfs, amsthm, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{color}
+\usepackage{url}
+\usepackage{verbatim}
+\usepackage{listing}
+\usepackage{framed}
+\usepackage{wrapfig}
+\graphicspath{ {./figures/}{./images/} }
+\usepackage[chapter]{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{multirow}
+
+%\usepackage{natbib}   
+
+
+%% page geometry
+%%\usepackage[left=1cm, right=1cm, top=1cm, bottom=1cm, includeheadfoot]{geometry}
+
+%%% Definitions
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{defn}{Definition}[chapter]
+\renewcommand\qedsymbol{$\blacksquare$}
+
+%%%% Math operators
+\DeclareMathOperator*{\maximize}{\scriptsize \mathbf{maximize}}
+\DeclareMathOperator*{\minimize}{\scriptsize \mathbf{minimize}}
+\DeclareMathOperator*{\E}{\mathbb{E}}
+
+%% Headers & footers
+\usepackage[headsepline=true,footsepline=true,automark]{scrlayer-scrpage}  
+%\AfterTOCHead{\pagestyle{plain}}
+%\AfterStartingTOC{\clearpage}
+
+\automark[chapter]{chapter}
+\automark*[section]{}
+
+%% Index words
+\usepackage{imakeidx}
+\makeindex[columns=2, title=Alphabetical Index, intoc]
+
+\usepackage[toc, acronym,nomain,nonumberlist]{glossaries}
+\makeglossaries
+
+%% abbreviations
+\input{acronym}
+
+\frenchspacing
+
+\begin{document}
+
+%% page style
+\pagestyle{scrheadings}
+\title{Deep Reinforcement Learning}
+\subtitle{A Practical Programming Handbook}
+\author{Swagat Kumar}
+\date{\today}
+
+%% Create title page
+\maketitle
+
+
+
+%% Table of Contents
+\tableofcontents
+
+%% Acronyms
+\glsaddall
+\printglossary[type=\acronymtype, title=Acronyms]
+
+%% List of Figures
+\listoffigures
+
+%% List of Algorithms
+\listofalgorithms
+
+%% List of Tables
+\listoftables
+
+%% chapter 1
+\input{chap01}
+
+%% chapter 2
+\input{chap02}
+
+%% chapter 3
+\input{chap03}
+
+%% chapter 4
+\input{chap04}
+
+%% chapter 5
+\input{chap05}
+
+%% chapter 6
+\input{chap06}
+
+%% chapter 7
+\input{chap07}
+
+%% Chapter 8
+\input{chap08}
+
+%%%% Appendices
+\appendix
+
+%% Appendix 1
+\input{app01}
+%\bibliographystyle{agsm} %% harvard style
+\bibliographystyle{unsrt}
+\bibliography{ref}
+
+\printindex
+\end{document}

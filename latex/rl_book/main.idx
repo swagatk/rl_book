@@ -1,0 +1,48 @@
+\indexentry{Markov Decision Process (MDP)!Markov Chain}{21}
+\indexentry{Markov Decision Process (MDP)!Markov Process}{21}
+\indexentry{Markov Decision Process (MDP)!Policy function}{22}
+\indexentry{Markov Decision Process (MDP)!Value function}{22}
+\indexentry{Markov Decision Process (MDP)!Q-function}{23}
+\indexentry{Markov Decision Process (MDP)!Bellman Equation}{23}
+\indexentry{Dynamic Programming}{25}
+\indexentry{Dynamic Programming!Value Iteration}{26}
+\indexentry{Dynamic Programming!Policy Iteration}{28}
+\indexentry{Environment!Gym!Frozen Lake Problem}{32}
+\indexentry{Environment!Gym!Taxi-v3 problem}{33}
+\indexentry{Monte Carlo Methods!Prediction}{39}
+\indexentry{Monte Carlo Methods!Prediction!First-Visit}{40}
+\indexentry{Monte Carlo Methods!Prediction!Every-visit}{40}
+\indexentry{Environment!Gym!Blackjack Game}{41}
+\indexentry{Monte Carlo Methods!Control}{48}
+\indexentry{Temporal Difference (TD) Learning}{55}
+\indexentry{Temporal Difference (TD) Learning!TD Prediction}{55}
+\indexentry{Temporal Difference (TD) Learning!TD Control}{56}
+\indexentry{Temporal Difference (TD) Learning!TD Control!Q-learning}{56}
+\indexentry{DQN!Deep Q Network}{67}
+\indexentry{DQN!Double DQN (DDQN)}{68}
+\indexentry{DQN!Replay Buffer}{69}
+\indexentry{Replay Buffer}{69}
+\indexentry{Environment!Gym!CartPole}{77}
+\indexentry{DQN!Priority Experience Replay (PER)}{79}
+\indexentry{Importance Sampling}{80}
+\indexentry{Sum-Tree}{80}
+\indexentry{Environment!Gym!Atari}{92}
+\indexentry{Environment!Gym!Atari!PacMan}{97}
+\indexentry{Policy Gradient Methods}{101}
+\indexentry{Monte-Carlo Policy Gradient}{104}
+\indexentry{Policy Gradient Methods!REINFORCE}{104}
+\indexentry{Environment!Gym!LunarLander}{109}
+\indexentry{Actor-Critic Architecture}{111}
+\indexentry{Deep Deterministic Policy Gradient (DDPG)}{111}
+\indexentry{Environment!Gym!Pendulum-v1}{120}
+\indexentry{Trust Region Policy Optimization (TRPO)}{124}
+\indexentry{Proximal Policy Optimization (PPO)}{127}
+\indexentry{Actor-Critic}{145}
+\indexentry{Actor-Critic!Naive}{145}
+\indexentry{Actor-Critic!Advantage Actor-Critic (A2C)}{154}
+\indexentry{Actor-Critic!Asynchronous Advantage Actor-Critic (A3C)}{162}
+\indexentry{Actor-Critic!SAC}{175}
+\indexentry{Soft Actor-Critic (SAC)}{175}
+\indexentry{Environment!Gym!LunarLander-Continuous-v3}{193}
+\indexentry{Environment!Gym!Fetch Reach}{194}
+\indexentry{State-Action Marginal Visitation Probability Distribution}{201}

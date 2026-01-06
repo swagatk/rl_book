@@ -1,0 +1,80 @@
+\begin{theindex}
+
+  \item Actor-Critic, 145
+    \subitem Advantage Actor-Critic (A2C), 154
+    \subitem Asynchronous Advantage Actor-Critic (A3C), 162
+    \subitem Naive, 145
+    \subitem SAC, 175
+  \item Actor-Critic Architecture, 111
+
+  \indexspace
+
+  \item Deep Deterministic Policy Gradient (DDPG), 111
+  \item DQN
+    \subitem Deep Q Network, 67
+    \subitem Double DQN (DDQN), 68
+    \subitem Priority Experience Replay (PER), 79
+    \subitem Replay Buffer, 69
+  \item Dynamic Programming, 25
+    \subitem Policy Iteration, 28
+    \subitem Value Iteration, 26
+
+  \indexspace
+
+  \item Environment
+    \subitem Gym
+      \subsubitem Atari, 92
+      \subsubitem Blackjack Game, 41
+      \subsubitem CartPole, 77
+      \subsubitem Fetch Reach, 194
+      \subsubitem Frozen Lake Problem, 32
+      \subsubitem LunarLander, 109
+      \subsubitem LunarLander-Continuous-v3, 193
+      \subsubitem Pendulum-v1, 120
+      \subsubitem Taxi-v3 problem, 33
+
+  \indexspace
+
+  \item Importance Sampling, 80
+
+  \indexspace
+
+  \item Markov Decision Process (MDP)
+    \subitem Bellman Equation, 23
+    \subitem Markov Chain, 21
+    \subitem Markov Process, 21
+    \subitem Policy function, 22
+    \subitem Q-function, 23
+    \subitem Value function, 22
+  \item Monte Carlo Methods
+    \subitem Control, 48
+    \subitem Prediction, 39
+      \subsubitem Every-visit, 40
+      \subsubitem First-Visit, 40
+  \item Monte-Carlo Policy Gradient, 104
+
+  \indexspace
+
+  \item Policy Gradient Methods, 101
+    \subitem REINFORCE, 104
+  \item Proximal Policy Optimization (PPO), 127
+
+  \indexspace
+
+  \item Replay Buffer, 69
+
+  \indexspace
+
+  \item Soft Actor-Critic (SAC), 175
+  \item State-Action Marginal Visitation Probability Distribution, 201
+  \item Sum-Tree, 80
+
+  \indexspace
+
+  \item Temporal Difference (TD) Learning, 55
+    \subitem TD Control, 56
+      \subsubitem Q-learning, 56
+    \subitem TD Prediction, 55
+  \item Trust Region Policy Optimization (TRPO), 124
+
+\end{theindex}

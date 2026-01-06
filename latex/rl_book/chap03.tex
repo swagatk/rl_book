@@ -1,0 +1,802 @@
+\chapter{Monte Carlo Simulation for Reinforcement Learning}
+
+\section{Introduction}
+
+\gls{mc} simulation is a powerful tool for reinforcement learning (RL). It can be used to estimate the value of states and actions, and to learn policies that maximize expected rewards. Monte Carlo simulation is particularly well-suited for RL problems where the environment is complex or stochastic, and where it is difficult or impossible to learn a model of the environment's dynamics.
+
+\section{What is Monte Carlo simulation?}
+
+Monte Carlo simulation is a computational method that uses random
+sampling to solve problems. It works by generating a large number of random
+samples from a probability distribution, and then performing some
+operation on those samples to get an estimate of the desired quantity.
+The intuition behind this approach can be better understood with the
+examples discussed below. 
+
+\subsection{Tossing a Coin}
+Here is a simple example of how to use a Monte Carlo 
+algorithm to estimate the probability of winning a coin toss game:
+\begin{itemize}
+  \item Toss a coin.
+  \item You win if a `head' is obtained. 
+  \item You loose if a `tail' is obtained.
+\end{itemize}
+You can repeat this process a large number of times to get a more
+accurate estimate of the probability of winning the game. For example,
+if you repeat the process 1000 times and predict that you will win 500
+times, then your estimated probability of winning the game is 50\%.
+
+\subsection{Estimating the value of pi using Monte Carlo}
+Consider the Figure \ref{fig:est_pi}(a) where a quadrant of a circle is
+drawn inside a square. Lets generate random number within the square.
+Some of these points will lie inside the circle and some will lie
+outside the circle. The value of $\pi$ can be calculated as
+follows:
+\begin{eqnarray}
+  \frac{\text{Area of Circle quadrant}}{\text{Area of square}} &=&
+  \frac{\frac{\pi
+  r^2}{4}}{a^2} = \frac{\pi}{4} \;\qquad \because r = a = 1 \nonumber \\
+  \pi &=&  4 \times \frac{\text{Area of Circle quadrant}}{\text{Area of
+  square}} \nonumber  \nonumber \\
+  \pi &=&  4 \times \frac{\text{Number of points inside the
+  circle}}{\text{Number of points inside the square}} 
+  \label{eq:est_pi}
+\end{eqnarray}
+Where radius $r$ of the circle is same as the length of each side of
+the square. Hence, the steps to estimate $\pi$ are as follows:
+\begin{enumerate}
+  \item Generate some random numbers inside the square.
+  \item Calculate the number of points that fall inside the circle by
+  using the equation $x^2+y^2 \le r$.
+\item Estimate $\pi$ by using \eqref{eq:est_pi}.
+\item Increase the number of samples to improve the estimate.
+\end{enumerate}
+
+\begin{figure}[!t]
+  \centering
+  \begin{tabular}{cc}
+  \includegraphics[scale=0.4]{./figures/chap03/estim_pi_circ.png} &
+  \includegraphics[scale=0.4]{./figures/chap03/pi_estimate.png}   \\
+  (a) & (b)
+\end{tabular}
+  \caption{Estimating $\pi$ through Monte-Carlo Simulation. (a) A
+  quadrant of circle inside a square. (b) Estimate of $\pi$ improves
+with increasing number of samples}
+  \label{fig:est_pi}
+\end{figure}
+The resulting estimate of $\pi$ is shown in Figure
+\ref{fig:est_pi}(b). As we can see, the estimation improves with
+increasing number of samples. The detailed Python code for
+implementing the above steps is provided in the Listing
+\ref{lst:est_pi_code}.
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import math
+def deg2rad(deg):
+  return deg * math.pi / 180
+
+#estimate pi
+import matplotlib.pyplot as plt
+import numpy as np
+pi_estimate = []
+for n in range(1, 10000):
+  s = np.random.uniform(0, 1.0, size=(n, 2))  # x,y points
+  r = np.sqrt(np.sum(s**2, axis=1))   # r = sqrt(x^2 + y^2)
+  c = np.sum(r < 1)                   # count points having r < 1
+  pi_estimate.append(4 * c / n)
+    
+#plotting sample points
+cin = s[r < 1] # points inside the circle
+cout = s[r > 1] # points outside the circle
+plt.scatter(cin[:,0], cin[:,1], s=1, label='points inside circle')
+plt.scatter(cout[:,0], cout[:,1], s=1, label='points outside circle')
+plt.xlabel('X')
+plt.ylabel('Y')
+# draw the circle
+theta = np.linspace(0, deg2rad(90), 1000) 
+radius = 1
+x = radius * np.sin(theta)
+y = radius * np.cos(theta)
+plt.plot(x, y, c='black')
+
+# new plot
+plt.figure()
+plt.plot(pi_estimate, label='estimate')
+plt.plot(3.14*np.ones_like(pi_estimate), c='r', label='3.14')
+plt.xlabel('Number of samples (n)')
+plt.ylabel('Estimate of $\pi$')
+plt.grid(color='gray')
+plt.legend(loc='best')
+  \end{pygments}
+  \caption{Python code for estimating $\pi$ through random sampling.}
+  \label{lst:est_pi_code}
+\end{listing}
+
+\section{Monte Carlo Prediction}
+\index{Monte Carlo Methods!Prediction}
+In the context of reinforcement learning, Monte Carlo simulation can
+be used to estimate the value of states and actions by simulating a
+large number of trajectories from those states and actions. The value
+of a state or action is then estimated as the average reward of the
+trajectories. The knowledge of system model (e.g. transition and
+reward probabilities) is not required for
+solving the Markov Decision Process (MDP) problem unlike the methods
+(e.g. value \& policy iteration) that we discussed in the last
+chapter. So, Monte-Carlo methods are \emph{model-free} methods which
+requires generating sample sequences of states, actions and
+rewards. The Monte-Carlo methods is applied only to episodic tasks.
+
+As per the definition provided in the previous chapter, a value
+function is the expected return from a state $s$ with a policy $\pi$
+as given by equations \eqref{eq:value1} and \eqref{eq:value_func}. In
+Monte-Carlo prediction, this value function is approximated by taking
+the mean return instead of the expected return. So, the steps involved
+in the Monte-Carlo prediction of value function is as follows:
+
+\begin{enumerate}
+  \item Initialize a random value to the value function.
+  \item Create an empty list to store returns.
+  \item For each state in the episode, calculate the return.
+  \item Append the return to the return list created above.
+  \item Take the average of the return list to compute the new value
+    function.
+\end{enumerate}
+
+Monte-Carlo prediction algorithms are of two types: (1) First-Visit
+Monte-Carlo and (2) Every-visit Monte-Carlo
+
+\subsection{First-Visit Monte-Carlo Algorithm}
+\index{Monte Carlo Methods!Prediction!First-Visit}
+The first-visit Monte Carlo prediction algorithm is used to estimate
+the value function of a Markov decision process (MDP) under a given
+policy. The algorithm works by repeatedly simulating episodes of the
+MDP and averaging the returns from each episode. The return of an
+episode is the sum of the rewards received, discounted by a discount
+factor.
+
+The first-visit Monte Carlo prediction algorithm only considers the
+first visit to each state in an episode when estimating the value
+function. This means that the algorithm can be biased towards states
+that are visited more often. However, the algorithm is relatively
+simple to implement and converges to the true value function as the
+number of simulated episodes increases.
+
+\subsection{Every-visit Monte-Carlo Algorithm}
+\index{Monte Carlo Methods!Prediction!Every-visit}
+The every-visit Monte Carlo prediction algorithm is similar to the
+first-visit Monte Carlo prediction algorithm, but it considers every
+visit to each state in an episode when estimating the value function.
+This means that the algorithm is less biased than the first-visit
+algorithm, but it is also more computationally expensive.
+
+The every-visit Monte Carlo prediction algorithm works by keeping
+track of the number of times each state is visited and the total
+reward received from each state. The value function for each state is
+then estimated by averaging the total reward received from the state,
+divided by the number of times the state has been visited.
+
+The every-visit Monte Carlo prediction algorithm converges to the true
+value function as the number of simulated episodes increases,
+regardless of the policy that is being evaluated. This makes it a good
+choice for evaluating policies that are likely to result in the same
+states being visited multiple times.
+
+\subsection{Playing Blackjack Game}
+\index{Environment!Gym!Blackjack Game}
+Let's play Blackjack game to get a better insight into Monte Carlo
+prediction algorithms. Blackjack is a card game played between a
+dealer and one or more players. The goal of the game is to get as
+close to 21 as possible without going over. If a player or the dealer
+goes over 21, they "bust" and lose the bet. Blackjack is played with a
+standard deck of 52 cards. The cards are assigned the following
+values:
+
+\begin{itemize}
+  \item Ace: 1 or 11
+  \item 2-10: Face value
+  \item Jack, Queen, King: 10
+\end{itemize}
+
+The game begins with each player placing a bet. The dealer then deals
+two cards to each player which are face up and visible to all. The
+dealer also takes two cards, one face up and another face down. The
+players then decide whether to \emph{hit} or \emph{stick}. To hit means to take
+another card. To stay means to keep the cards that they have.
+
+If the player hit and the sum of cards exceed 21 then it is a
+\emph{bust} and he looses the game. If he decides to stick, the
+dealer can reveal with face down card and the sum of dealer's card
+will be checked. If it does not exceed 21 and higher than player's sum
+of cards, the dealer wins. Otherwise, the player wins. If the player's
+and dealer's sum of cards is same, then it is a \emph{draw}.
+
+The rewards of the game can have one of the following values:
+\begin{itemize}
+  \item +1 if the player wins.
+  \item -1 if the player loses.
+  \item 0 if it is a draw.
+\end{itemize}
+
+The possible actions are:
+\begin{itemize}
+  \item Stick (0): If the player does not need a card.
+  \item Hit (1): If the player takes a card from the deck.
+\end{itemize}
+
+The player has the freedom to decide the value of an ace depending on
+his current score. If player's sum is 10 and the player receives an
+ace after a hit, he can consider it as 11 leading to a total sum of 21
+(win). But if the player's sum is 17, he/she can consider the  ace to
+1 to avoid a bust. If player can consider an ace to be 11 without
+being bust, it is called an \emph{usable ace}. Otherwise, it will be
+called a \emph{non-usable ace}.
+
+The code for visualizing the state of Gymnasium's Blackjack
+environment is provided in the Listing \ref{lst:bj_env}.  The
+visualization of two states are shown in Figure \ref{fig:bj_viz}.
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import sys
+import gymnasium as gym
+import matplotlib.pyplot as plt
+env = gym.make('Blackjack-v1', render_mode="rgb_array")
+state = env.reset()
+print('state:', state)
+action = env.action_space.sample()
+print('Step function output: ', env.step(action))
+print('Observation space: ', env.observation_space.spaces)
+print('Action values:', env.action_space.n)
+screen = env.render()
+plt.imshow(screen)
+plt.axis('off')
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+Program Output:
+state: ((13, 10, 0), {})
+Step function output:  ((13, 10, 0), 1.0, True, False, {})
+Observation space:  (Discrete(32), Discrete(11), Discrete(2))
+Action values: 2
+    \end{verbatim}
+  \end{framed}
+  \caption{Python code to  visualize Blackjack environment}
+  \label{lst:bj_env}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tabular}{cc}
+  \includegraphics[scale=0.4]{./figures/chap03/blackjack_env.png} &
+  \includegraphics[scale=0.4]{./figures/chap03/blackjack_env_ace.png}\\
+  (a) & (b)
+\end{tabular}
+  \caption{Visualization of a state of Blackjack environment. The
+  second image shows a state with an usable ace.}
+  \label{fig:bj_viz}
+\end{figure}
+
+The Python code for implementing first-visit \& every-visit Monte Carlo prediction of
+state-action value (Q) function is provided in the Listing
+\ref{lst:mcp_fv}. As mentioned earlier, the value function $V$ for a given
+state $s$ is approximated as the average value of (discounted) future rewards
+obtainable from this state. This is given by
+ \begin{eqnarray}
+   \label{eq:mcup1}
+V_N &=& \frac{1}{N}\sum_{i=1}^N \gamma^i R_i =
+\frac{1}{N}[\sum_{i=1}^{N-1} \gamma^i R_i
++ \gamma^N R_N]  \\
+&=& \frac{1}{N}[(N-1)V_{N-1} + \gamma^N R_N] \nonumber \\
+ &=& V_{N-1} + \frac{1}{N}[\gamma^N R_N - V_{N-1}] \nonumber \\
+ \label{eq:mcup2}
+V_N &=& V_{N-1} + \frac{1}{N}[R_N - V_{N-1}] \; \qquad
+(\text{assuming}\; \gamma = 1)
+\end{eqnarray}
+The class method \texttt{mc\_predict()} provides option to use either
+equation \eqref{eq:mcup1} or \eqref{eq:mcup2} through the
+\texttt{method} argument for updating the estimate of Q function. The
+episodes for Monte Carlo simulation is generated using a sample policy
+that chooses to \emph{stick} with 80\% probability if the player sum
+of cards is greater than 18. Otherwise, it chooses to \emph{hit} with
+80\% probability. The pseudocode for first-visit Monte Carlo
+Prediction algorithm is provided in Algorithm \ref{alg:fvmcp}. This
+listing provides implementation of both `first visit' and `every-visit
+algorithm'. There is not much difference in the performance of these
+two algorithms for the \texttt{Blackjack} environment as each state is
+not visited more than once in each episode. 
+
+\begin{algorithm}
+  \caption{First-Visit Monte Carlo Algorithm (\emph{for state-action
+  values})}
+  \label{alg:fvmcp}
+  \begin{algorithmic}[1]
+    \State \textbf{Input:} policy $\pi$ to be evaluated
+    \State \textbf{Output:} State-action value function $Q$
+    \State Initialize $N(s,a)=0$ for all $s \in \mathscr{S}, a \in
+    \mathscr{A}$
+    \State Initialize $returns\_sum(s,a) = 0$ for all $s \in
+    \mathscr{S}, a \in \mathscr{A}$
+    \For{$i \gets 1$ to $num\_episodes$} 
+      \State Generate an episode $\{(s,a,r)_i, i=1 \ldots T\}$ with policy $\pi$
+      \For{each state $s$ in episode}
+         \If{$(s,a)$ is a first visit (with return $G_t$)}
+            \State $N(s,a) \gets N(s,a) + 1$
+            \State $returns\_sum(s,a) \gets returns\_sum(s,a) + G_t$
+            \State $Q(s,a) \gets returns\_sum(s,a)/N(s,a)$
+         \EndIf
+       \EndFor
+     \EndFor
+     \State \textbf{return} $Q$
+  \end{algorithmic}
+\end{algorithm}
+
+The resulting value estimates are shown in Figure
+\ref{fig:bj_v_est}. This plot can be generating by using the python
+functions provided in Listing \ref{lst:plot_bj_vp}. It can be seen
+that the states where the player's sum of cards is greater than 18 are
+more valuable. The values reduce slightly when the ace is not usable. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+from collections import defaultdict
+import numpy as np
+import random
+class MCPAgent:
+  def __init__(self, env, gamma=0.99):
+    self.env = env
+    self.n_actions = env.action_space.n
+    self.gamma = gamma
+    print('Environment: ', self.env.spec.name)
+
+  def sample_policy(self, obs):
+    player_sum, dealer_show, usable_ace = obs
+    probs = [0.8, 0.2] if player_sum > 18 else [0.2, 0.8]
+    action = np.random.choice(np.arange(2), p=probs)
+    return action
+
+  def generate_episode(self):
+    """ Plays a single episode with a set policy. 
+    Records the state, action and reward for each step 
+    returns all the timesteps for the episode.  """
+    episode = []
+    state = env.reset()[0]
+    while True:
+      action = self.sample_policy(state)
+      next_state, reward, done, info, _ = env.step(action)
+      episode.append((state, action, reward))
+      state = next_state
+      if done:
+        break
+    return episode
+
+def update_Q_first_visit(self, episode, Q, returns_sum, N, method=1):
+    G = 0
+    visited_state = set()
+    for i in range(len(episode)-1, -1, -1):    # traverse in reverse order 
+      state, action, reward = episode[i]
+      G += self.gamma ** i * reward # returns for (s,a)
+      if (state, action) not in visited_state:    # if first visit 
+        N[state][action] += 1  # first visit count
+        if method == 1:
+          returns_sum[state][action] += G  # update returns
+          Q[state][action] = returns_sum[state][action] / N[state][action]
+        else:
+          returns_sum[state][action] = G # update returns
+          Q[state][action] += (returns_sum[state][action] - 
+                           Q[state][action])/ N[state][action]
+        visited_state.add((state, action))
+
+  def update_Q_every_visit(self, episode, Q, returns_sum, N, method=1):
+    G = 0  # return
+    for i in range(len(episode)-1, -1, -1):
+      s, a, r = episode[i]
+      G += self.gamma ** i * r  # returns for (s,a)
+      N[s][a] += 1    # every-visit count
+      if method == 1:
+        returns_sum[s][a] += G
+        Q[s][a] = returns_sum[s][a] / N[s][a]
+      else:
+        returns_sum[s][a] = G
+        Q[s][a] += (returns_sum[s][a] - Q[s][a]) / N[s][a]
+  
+  def mc_predict(self, num_episodes=100000, first_visit=False, method=1):
+    """ This plays through several episodes of the game """
+    returns_sum = defaultdict(lambda: np.zeros(self.env.action_space.n))
+    N = defaultdict(lambda: np.zeros(self.env.action_space.n))
+    Q = defaultdict(lambda: np.zeros(self.env.action_space.n))
+    for i in range(1, num_episodes+1):
+      if i % 1000 == 0:
+        print('\rEpisode: {}/{}.'.format(i, num_episodes), end="")
+        sys.stdout.flush()
+      episode = self.generate_episode()
+      if first_visit:
+        self.update_Q_first_visit(episode, Q, returns_sum, N, method)
+      else:
+        self.update_Q_every_visit(episode, Q, returns_sum, N, method)
+    return Q
+
+  def QtoV(self, Q):
+    ''' Converts Q to V '''
+    V = dict((k, (k[0]>18) * (np.dot([0.8, 0.2], v)) + \
+     (k[0] <= 18) * (np.dot([0.2, 0.8], v))) for k, v in Q.items())
+    return V
+
+if __name__ == '__main__':
+  agent = MCPAgent(env)
+  Q = agent.mc_predict(num_episodes=500000, method=2)
+  V = agent.QtoV(Q)
+  \end{pygments}
+  \caption{Python code for estimating value function using First-Visit Monte-Carlo
+  Prediction}
+  \label{lst:mcp_fv}
+\end{listing}
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+def plot_blackjack_values(V):
+  def get_Z(x, y, usable_ace):
+    if (x,y,usable_ace) in V:
+        return V[x,y,usable_ace]
+    else:
+        return 0
+
+  def get_figure(usable_ace, ax):
+    x_range = np.arange(11, 22)
+    y_range = np.arange(1, 11)
+    X, Y = np.meshgrid(x_range, y_range)
+    Z = np.array([get_Z(x,y,usable_ace) \
+            for x,y in zip(np.ravel(X), np.ravel(Y))]).reshape(X.shape)
+    surf = ax.plot_surface(X, Y, Z, rstride=1, \
+            cstride=1, cmap=plt.cm.coolwarm, vmin=-1.0, vmax=1.0)
+    ax.set_xlabel('Player\'s Current Sum')
+    ax.set_ylabel('Dealer\'s Showing Card')
+    ax.set_zlabel('State Value')
+    ax.view_init(ax.elev, -120)
+
+  fig = plt.figure(figsize=(20, 20))
+  ax = fig.add_subplot(121, projection='3d')
+  ax.set_title('Usable Ace')
+  get_figure(True, ax)
+  ax = fig.add_subplot(122, projection='3d')
+  ax.set_title('No Usable Ace')
+  get_figure(False, ax)
+  plt.show()  
+
+  # code for plotting policy
+ def plot_blackjack_policy(policy):
+
+  def get_Z(x, y, usable_ace):
+    if (x,y,usable_ace) in policy:
+      return policy[x,y,usable_ace]
+    else:
+      return 1
+
+  def get_figure(usable_ace, ax):
+    x_range = np.arange(11, 22)
+    y_range = np.arange(10, 0, -1)
+    X, Y = np.meshgrid(x_range, y_range)
+    Z = np.array([[get_Z(x,y,usable_ace) for x in x_range] for y in y_range])
+    surf = ax.imshow(Z, cmap=plt.get_cmap('Pastel2', 2), \
+                     vmin=0, vmax=1, extent=[10.5, 21.5, 0.5, 10.5])
+    plt.xticks(x_range)
+    plt.yticks(y_range)
+    plt.gca().invert_yaxis()
+    ax.set_xlabel('Player\'s Current Sum')
+    ax.set_ylabel('Dealer\'s Showing Card')
+    ax.grid(color='w', linestyle='-', linewidth=1)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+    cbar = plt.colorbar(surf, ticks=[0,1], cax=cax)
+    cbar.ax.set_yticklabels(['0 (STICK)','1 (HIT)'])
+
+  fig = plt.figure(figsize=(15, 15))
+  ax = fig.add_subplot(121)
+  ax.set_title('Usable Ace')
+  get_figure(True, ax)
+  ax = fig.add_subplot(122)
+  ax.set_title('No Usable Ace')
+  get_figure(False, ax)
+  plt.show()
+  \end{pygments}
+  \caption{Python code for plotting Value and Policy for Blackjack
+  environment}
+  \label{lst:plot_bj_vp}
+\end{listing}
+
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tabular}{c}
+    \includegraphics[scale=0.3]{./figures/chap03/bj_v_surf.png}  
+\end{tabular}
+  \caption{Estimated Value function with and without usable ace}
+  \label{fig:bj_v_est}
+\end{figure}
+
+
+Another implementation of the first-visit Monte-Carlo algorithm for
+updating Q is provide in the listing \ref{lst:fvmc_2}. It uses
+Python's list comprehension to provide a more compact code for the
+same task.
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+  def update_Q_first_visit(self, episode, Q, returns_sum, N, method=1):
+    """
+    Another implementation of First Visit Monte-Carlo update of Q values.
+    """
+    for s, a, r in episode:
+      first_occurrence_idx = next(i \
+              for i, x in enumerate(episode) if x[0] == s)
+      G = sum([x[2] * (self.gamma ** i) \
+              for i, x in enumerate(episode[first_occurrence_idx:])])
+      N[s][a] += 1  # first visit count for (s,a)
+      if method == 1:
+        returns_sum[s][a] += G
+        Q[s][a] = returns_sum[s][a] / N[s][a]
+      else:
+        returns_sum[s][a] = G
+        Q[s][a] += (returns_sum[s][a] - Q[s][a]) / N[s][a]    
+  \end{pygments}
+  \caption{Another implementation of first visit algorithm for
+  estimating Q values.}
+  \label{lst:fvmc_2}
+\end{listing}
+
+\section{Monte Carlo Control}
+\index{Monte Carlo Methods!Control}
+In the last section, we saw how we can estimate the value function. In
+this section, we will see how we can optimize the value function to
+learn the optimal control strategy for the given task. The process
+involves executing an iterative cycle of \emph{policy evaluation} and
+\emph{policy improvement} until a convergence is achieved where the
+policy or the value function do not change any further.  Specifically,
+we will discus a particular version of Monte-Carlo control algorithm
+known as GLIE-MC Control algorithm. GLIE stands for '\emph{Greedy in
+the limit with infinite exploration}'. In order to learn the best
+policy, the agent uses a mix of good moves learnt in the past
+(\emph{exploitation}) and new moves not tried before
+(\emph{exploration}). The balance between exploration and exploitation
+is achieved by using an
+$\epsilon-$greedy policy where the agent takes random action with
+probability $\epsilon$ and acts greedily with a probability of
+$1-\epsilon$. A higher $\epsilon$ signifies more exploration. A greedy
+algorithm picks up the best choice available at that moment which may
+not be optimal for the overall problem. In other words a greedy policy
+might be locally optimal but globally sub-optimal. 
+
+Thus the steps involved in each iterative cycle of
+Monte-Carlo Control algorithm is as follows:           
+\begin{enumerate}
+  \item Initialization
+  \item Exploration
+  \item Update Policy - \emph{Policy improvement}
+  \item Generate episode with new policy 
+  \item Update Q values - \emph{Policy evaluation}
+\end{enumerate}
+The pseudocode of this algorithm is provided in Algorithm
+\ref{alg:fvmcc}. The Q values are updated using a variant of
+\eqref{eq:mcup2} as given below:
+\begin{equation}
+  Q(s,a)  = Q(s,a) + \alpha (G_t - Q(s,a))
+  \label{eq:mcc_qupdate}
+\end{equation}
+where $\alpha$ is the learning rate which controls the amount of
+increment in Q values at each step. A small value is preferred for
+$\alpha$ to avoid instability. $G_t$ is first-visit return for the
+state-action pair $(s,a)$ in a given episode. The full Python code for
+this algorithm is provided in Listing \ref{lst:fvmcc_code}. The
+resulting plots are shown in Figure \ref{fig:mcc_vp}. It can be seen
+that the agent prefers to hit when the player sum is less than 16 with
+usable ace. On the other hand, with no usable ace, the agent prefers
+to hit only when the player sum is less than 12. In others words, it
+prefers to stick more often without an usable ace.  The agent explores
+more in the beginning starting with $\epsilon=1$. This explorations
+decreases over time as the training proceeds and the agent starts
+exploiting its past experience increasingly over time. This is
+achieved by decaying $\epsilon$ through the iterations.
+
+
+\begin{algorithm}
+  \caption{First-Visit Constant-$\alpha$ GLIE MC Control Algorithm}
+  \label{alg:fvmcc}
+  \begin{algorithmic}[1]
+    \State \textbf{Input:} $num\_episodes$, $0<\alpha <1$,
+    GLIE ${\epsilon_i}$
+    \State \textbf{Output:} policy $\pi$ ($\approx \pi^*$ if
+    $num\_episodes$ is large enough)
+    \State Initialize $Q$ arbitrarily (e.g., $Q(s,a)=0\;\forall s \in
+    \mathscr{S}$, $a\in \mathscr{A}$)
+    \For{$i\leftarrow 1$ \textbf{to} $num\_episodes$}
+      \State $\epsilon \leftarrow \epsilon_i$
+      \State $\pi \leftarrow \epsilon-$Greedy(Q)
+      \State Generate an episode $S_0, A_0, R_1, \cdots, S_T$ using
+    $\pi$
+      \For{$t\leftarrow 0$ \textbf{to} $num\_episodes$}
+         \If{$(S_t, A_t)$ is a first visit with return $G_t$}
+            \State $Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha (G_t
+            - Q(S_t, A_t))$
+         \EndIf
+      \EndFor
+    \EndFor
+    \State \textbf{return} $\pi$
+  \end{algorithmic}
+\end{algorithm}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import numpy as np
+import sys
+import random
+from collections import defaultdict
+
+class MCAgent():
+  def __init__(self, env, alpha=0.0001, gamma=0.99, ep_decay=0.9999):
+    self.env = env
+    self.n_action = self.env.action_space.n
+    self.alpha = alpha
+    self.gamma = gamma
+    print('Environment name: ', self.env.spec.name)
+
+  def best_policy(self, Q):
+    policy = dict((k, np.argmax(v)) for k, v in Q.items())
+    return policy
+
+  def epsilon_greedy_policy(self, state, Q, epsilon):
+    if random.uniform(0, 1) < epsilon: # explore
+      action = self.env.action_space.sample()
+    else: # exploit
+      action = np.argmax(Q[state,:])
+    return action
+
+  def generate_episode(self, Q, epsilon):
+    states, actions, rewards = [], [], []
+    state = self.env.reset()[0]
+    while True:
+      states.append(state)
+      action = self.epsilon_greedy_policy(state, Q, epsilon)
+      actions.append(action)
+      next_state, reward, done, info, _ = env.step(action)
+      rewards.append(reward)
+      state = next_state
+      if done:
+        break
+    return (states, actions, rewards)
+
+  def update_Q(self, episode, Q):
+    returns = 0
+    states, actions, rewards = episode
+    for t in range(len(states) - 1, -1, -1): # traverse in reverse order
+      s = states[t]
+      a = actions[t]
+      r = rewards[t]
+      returns += r * (self.gamma ** t) # discounted rewards
+      if s not in states[:t]:   # if S is a first visit (last index is ignore)
+        Q[s][a] += self.alpha * (returns - Q[s][a])
+    return Q
+
+  def mc_control(self, num_episodes=500000):
+    Q = defaultdict(lambda: np.zeros(self.n_action))
+    epsilon = 1.0
+    eps_min = 0.0001
+    decay = 0.9999
+    for i in range(num_episodes):
+      if i % 1000 == 0:
+        print('\rEpisode: {}/{}.'.format(i, num_episodes), end="")
+        sys.stdout.flush()
+
+      episode = self.generate_episode(Q, epsilon)
+      Q = self.update_Q(episode, Q)
+      self.epsilon = max(epsilon * decay, eps_min)
+      policy = self.best_policy(Q)
+    return policy, Q
+
+  def __delete__(self):
+    self.env.close()
+
+if __name__ == '__main__':
+  env = gym.make("Blackjack-v1")
+  agent = MCAgent(env)
+
+  # Learn optimal policy
+  policy, Q = agent.mc_control(num_episodes=500000)
+
+  # Compute value function
+  V = dict((k, np.max(v)) for k, v in Q.items())
+
+  # plot Value & Policy
+  plot_blackjack_values(V)
+  plot_blackjack_policy(policy)
+  \end{pygments}
+  \caption{Python code for implementing First-Visit GLIE Monte-Carlo
+  Control algorithm.}
+  \label{lst:fvmcc_code}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tabular}{c}
+  \includegraphics[scale=0.3]{./figures/chap03/bj_mcc_v.png}  \\
+  {\scriptsize (a) Estimated Values} \\
+  \includegraphics[scale=0.3]{./figures/chap03/bj_mcc_policy.png} \\
+  {\scriptsize (b) Estimated Policy} 
+\end{tabular}
+  \caption{Estimated Value and Policy for Blackjack Environment
+  obtained with Monte-Carlo Control algorithm.}
+  \label{fig:mcc_vp}
+\end{figure}
+
+\subsection{On-Policy \& Off-Policy Monte Carlo Algorithms}
+
+The policy used to generate actions during interaction with the
+environment is called the \emph{behaviour} policy. The policy which is
+being evaluated and improved is called the \emph{target} policy. In
+on-policy algorithms, the behaviour policy and the target policy are
+same. The agent learns directly from the experiences generated using
+its current policy. REINFORCE and SARSA are the examples of on-policy
+algorithms. 
+
+On the other hand, the target policy and the
+behavior policy are different. The agent learns from experiences
+generated with a different policy (usually more exploratory). This
+allows for learning from potentially better actions without having to
+execute them directly. Q-learning and expected-SARSA are off-policy
+algorithms. 
+
+The on-policy algorithms are comparatively less efficient in learning
+the optimal policy as they have limited experiences to learn from.
+They are however more stable due to direct policy updates. On
+the other hand, the off-policy algorithms are more efficient in
+learning from diverse experiences. They can be comparatively less
+stable due to indirect updates.
+
+\section{challenges of Using Monte Carlo Simulation for
+Reinforcement Learning}
+
+Despite its many advantages, Monte Carlo simulation also has some challenges:
+
+\begin{itemize}
+  \item Sample complexity: Monte Carlo simulation can be slow to
+    learn, especially in environments with a large number of states
+    and actions. This is because Monte Carlo simulation needs to
+    generate a large number of samples in order to get accurate
+    estimates of the value of states and actions.
+
+  \item Variance: Monte Carlo simulation can be sensitive to the
+    initial policy. If the initial policy is very poor, then it can
+    take a long time for Monte Carlo simulation to learn a good
+    policy.
+    
+  \item Exploration: Monte Carlo simulation can be difficult to use in
+    environments where the agent can only collect a small number of
+    samples. This is because Monte Carlo simulation needs to explore
+    different state-action sequences in order to learn a good policy.
+
+  \item Monte Carlo methods are generally applied to episodic tasks.
+    This is because of their reliance on the concept of discounted
+    return, which requires a well-defined end to each episode to
+    calculate the return for a state. Hence, Monte Carlo methods are not very
+    suitable for solving continuous or non-episodic tasks. 
+
+ \end{itemize}
+
+ \section{Conclusion}
+
+Monte Carlo simulation is a powerful and versatile tool for
+reinforcement learning. It is a model-free approach that relies on
+sampling to estimate the average value of a given quantity.  It can be
+used to solve a wide variety of RL problems, including games,
+robotics, and finance. However, Monte Carlo simulation also has some
+challenges, such as sample complexity, variance, and exploration. Two
+types of Monte Carlo algorithms, namely, first-visit and every-visit
+were discussed to estimate value functions. It is also shown how Monte
+Carlo algorithms can be used for learning optimal policy.  
+

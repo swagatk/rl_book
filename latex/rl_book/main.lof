@@ -1,0 +1,49 @@
+\babel@toc {english}{}\relax 
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {1.1}{\ignorespaces Components of a Reinforcement Learning System. $\mathbb {E}_{\pi } (R)$ is the expected future reward under a given policy $\pi $.}}{17}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces Visualization of the Frozen Lake Environment}}{32}{}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces Visualization of The Taxi-v3 environment}}{34}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Estimating $\pi $ through Monte-Carlo Simulation. (a) A quadrant of circle inside a square. (b) Estimate of $\pi $ improves with increasing number of samples}}{38}{}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces Visualization of a state of Blackjack environment. The second image shows a state with an usable ace.}}{42}{}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Estimated Value function with and without usable ace}}{48}{}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Estimated Value and Policy for Blackjack Environment obtained with Monte-Carlo Control algorithm.}}{52}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Comparing the training performance of SARSA and Q learning algorithm for \texttt {Taxi-v3} environment.}}{64}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Schematic of DQN Learning Algorithm}}{68}{}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Visualization of CartPole environment. The task is to balance the pole in the vertical position by controlling the motion of the cart.}}{78}{}%
+\contentsline {figure}{\numberline {5.3}{\ignorespaces Performance of DDQN algorithm in solving the CartPole problem}}{79}{}%
+\contentsline {figure}{\numberline {5.4}{\ignorespaces Adding samples with priority to a sum-tree replay buffer}}{80}{}%
+\contentsline {figure}{\numberline {5.5}{\ignorespaces Retrieving samples with priority from a sum-tree replay buffer}}{81}{}%
+\contentsline {figure}{\numberline {5.6}{\ignorespaces Gym's Mountain Car Problem. The goal is to reach the top of the hill as soon as possible.}}{87}{}%
+\contentsline {figure}{\numberline {5.7}{\ignorespaces Training performance of the DQN PER Agent used for solving the Mountain Car Problem. The problem is considered solved if the car position reaches 0.5, episodic reward reaches 200 in less than 200 steps.}}{91}{}%
+\contentsline {figure}{\numberline {5.8}{\ignorespaces A PacMan Atari Environment Observation}}{93}{}%
+\contentsline {figure}{\numberline {5.9}{\ignorespaces Training performance of DQN and DQN+PER algorithm for PacMan Environment}}{99}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {6.1}{\ignorespaces Performance of REINFORCE algorithm on \texttt {Cartpole-v0} environment. It shows average episodic score and average score of last 100 episodes as training progresses.}}{109}{}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces A few snapshots of Lunar-Lander environment. }}{109}{}%
+\contentsline {figure}{\numberline {6.3}{\ignorespaces Performance of REINFORCE algorithm on \texttt {LunarLander-v2} problem. The problem is considered solved if episodic score exceeds 200.}}{110}{}%
+\contentsline {figure}{\numberline {6.4}{\ignorespaces Actor-Critic Architecture}}{112}{}%
+\contentsline {figure}{\numberline {6.5}{\ignorespaces A few snapshots of \texttt {Pendulum-v1} environment states. (d) shows the final successful state of the environment.}}{121}{}%
+\contentsline {figure}{\numberline {6.6}{\ignorespaces Training performance of DDPG algorithm in solving \texttt {Pendulum-v1} problem}}{123}{}%
+\contentsline {figure}{\numberline {6.7}{\ignorespaces Single time step of surrogate function $J^{\text {CLIP}}$ as a function of probability ratio $r$ for positive (left) and negative (right) advantages. The red circle shows the starting point of policy optimization}}{128}{}%
+\contentsline {figure}{\numberline {6.8}{\ignorespaces PPO training performance for \texttt {Pendulum-v1} environment}}{140}{}%
+\contentsline {figure}{\numberline {6.9}{\ignorespaces PPO training performance for \texttt {LunarLander-v2-Continuous} environment}}{142}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {7.1}{\ignorespaces Performance of Naive Actor Critic Algorithm in solving \texttt {CartPole-v1} problem.}}{153}{}%
+\contentsline {figure}{\numberline {7.2}{\ignorespaces Training performance of A2C algorithm for \texttt {Lunarlander-v3} environment}}{162}{}%
+\contentsline {figure}{\numberline {7.3}{\ignorespaces Block Diagram to understand A3C architecture}}{163}{}%
+\contentsline {figure}{\numberline {7.4}{\ignorespaces Training performance of A3C algorithm for \texttt {LunarLander-v3} environment}}{174}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {8.1}{\ignorespaces Training performance of SAC2 agent for solving \texttt {Pendulum-v1} problem}}{193}{}%
+\contentsline {figure}{\numberline {8.2}{\ignorespaces Training performance of SAC agent on \texttt {LunarLanderContinous-v3} environment}}{195}{}%
+\contentsline {figure}{\numberline {8.3}{\ignorespaces \small \add@extra@listi {sml}Screenshots of a few observation states of \texttt {FetchReachDense-v3} environment. The red dot is the desired goal that the robot end-effector expected to reach for successful completion of task.}}{196}{}%
+\contentsline {figure}{\numberline {8.4}{\ignorespaces \small \add@extra@listi {sml}Training performance of SAC algorithm on \texttt {FetchReachDense-v3} environment}}{197}{}%
+\contentsline {figure}{\numberline {8.5}{\ignorespaces \small \add@extra@listi {sml}SAC agent's soss functions: (a) Actor \& Alpha losses, (b) Value \& Critic losses}}{198}{}%
+\contentsline {figure}{\numberline {8.6}{\ignorespaces Comparing performances of two implementations: SAC \& SAC2}}{198}{}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\providecommand \tocbasic@end@toc@file {}\tocbasic@end@toc@file 

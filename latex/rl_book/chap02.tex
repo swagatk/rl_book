@@ -1,0 +1,803 @@
+\chapter{Markov Decision Process and Dynamic Programming}
+\label{chap:mdp}
+
+\section{Markov chain and Markov Decision process}
+\index{Markov Decision Process (MDP)!Markov Chain}
+\index{Markov Decision Process (MDP)!Markov Process}
+The Markov property states that the future only depends on the present
+and not on the past. The Markov chain is a probabilistic model that
+solely depends on the current state to predict the future state and
+not the previous states. The Markov chain strictly follows the Markov
+Property. Moving from one state to another is called a
+\textbf{transition} and its probability is called a transition
+probability. 
+
+The Markov decision process (MDP) is an extension of Markov Chain used for modeling decision-making
+situations. A RL problem can be modeled as an MDP which is represented
+by a tuple $(S,A,P,R, \gamma)$ where
+\begin{itemize}
+  \item $S$ is a set of states the agent can be in.
+  \item $A$ is a set of actions that can be performed by the agent at
+    any state to move to another state.
+  \item $P(s'|s,a)$ is the transition probability of moving from state
+    $s$ to $s'$.
+  \item $R(s,a)$ is the reward received by the agent for transitioning from
+    state $s$ to $s'$ by performing the action $a$.
+  \item $\gamma$ is the discount factor the controls the importance of
+    immediate and future rewards. 
+\end{itemize}
+The MDP provides a mathematical framework for solving the
+reinforcement learning (RL) problem as we will see in this chapter.
+
+\subsection{Rewards and Returns}
+In an RL environment, an agent interacts with an environment by
+performing an action and moves from one state to another. In the
+process, it receives a reward indicating how good or bad the action
+is.  This reward is obtained by using a function $R(s,a): (S, A)
+\rightarrow R$ where $S, A \textrm{R}$ represent state ($s$),
+action ($a$) and reward ($r$) spaces respectively. The agent tries to
+maximize the total amount of future rewards (cumulative rewards)
+received from the environment starting from the current state. The
+total amount of future rewards obtained by the agent is called
+\emph{returns} and is denoted by $G_t$.  The return for an episodic
+environment is given by 
+\begin{equation} G_t = r_{t+1} + r_{t+2} +
+  r_{t+3} + \cdots + r_T \label{eq:cum_re} \end{equation} where
+$r_{t+1} = R(s_t=s, a_t=a)$ is the reward obtained at the next time
+instant as the agent
+transitions from state $s_t$ to $s_{t+1}$ by performing the current
+action $a_t$. In case of non-episodic or continuous environments (with
+no terminal state), the return could be computed as an infinite sum of
+rewards given by \begin{equation} G_t = r_{t+1} + r_{t+2} + \cdots
+  \label{eq:cum_re1} \end{equation}
+
+Usually, a discount factor is included to decide how much importance
+should be given to future and immediate rewards. Hence the above
+equation can be rewritten as:
+\begin{equation}
+  G_t =  r_{t+1} + \gamma r_{t+2} + \gamma^2 r_{t+3} + \cdots = \sum_{k=0}^\infty \gamma^k r_{t+k+1}
+  \label{eq:cum_red}
+\end{equation}
+where $\gamma$ is the discount factor whose value lies between 0 and
+1. A zero value of $\gamma$ means that the immediate reward is more
+important while $\gamma=1$ indicates the future rewards are more
+important than the immediate rewards. 
+
+\subsection{The policy function}
+\index{Markov Decision Process (MDP)!Policy function}
+The policy function is a mapping from agent's state space to action
+space. It is represented as $\pi(s):S\rightarrow A$. The policy
+function is used to decide what action to take in each state. The goal
+of the agent is to learn the optimal policy that would maximize the
+total reward obtainable for a given task. The policy can be
+deterministic or stochastic. In deterministic policy, action is
+defined as a function of state, i.e., $a=\pi(s)$. On the other hand,
+a stochastic policy is defined as a probability of taking an action
+given the current state under the policy. This is denoted by the
+expression: $P_\pi[A=a|S=s]=\pi(a|s)$. 
+
+\subsection{State-Value function}
+\index{Markov Decision Process (MDP)!Value function}
+A state-value function or simply a value function specifies how good
+it is for an agent to be in a particular state with policy $\pi$. It
+is denoted by $V(s)$ and specifies the value of a state following a
+policy $\pi$. Mathematically, it can be defined as the expected return
+starting from state $s$ according to policy $\pi$ as given by:
+\begin{equation}
+  V^\pi(s) = \mathbb{E}_\pi[G_t|s_t=s] 
+  \label{eq:value1}
+\end{equation}
+By substituting the value from \eqref{eq:cum_red}, the value function
+may be rewritten as follows:
+\begin{equation}
+  V^\pi(s) = \mathbb{E}_\pi\left[\sum_{k=0}^\infty \gamma^k r_{t+k+1}|s_t=s \right]
+  \label{eq:value_func}
+\end{equation}
+It is to be noted that the value function depends on the selected
+policy. The value of a state will change with varying policy. 
+
+\subsection{State-action value function (Q-function)}
+\index{Markov Decision Process (MDP)!Q-function}
+A state-action value function (also know as Q function) specifies the
+value of taking a particular action in a given state with a policy
+$\pi$. Mathematically, it can be written as:
+\begin{equation}
+  Q^\pi(s,a) = \mathbb{E}_\pi[G_t|s_t=s, a_t=a] = \mathbb{E}_\pi
+  \left[\sum_{k=0}^\infty \gamma^k r_{t+k+1}|s_t=s, a_t=a \right] 
+  \label{eq:q_func}
+\end{equation}
+
+The difference between value function and Q function is that value
+function specifies the goodness of a state while the Q-function
+specifies the goodness of taking an action in that state.
+
+
+\subsection{Optimality}
+As mentioned earlier, value function depends on a policy. The optimal
+value function is one that yields maximum value compared to other
+value functions. Mathematically, it can be written as:
+
+\begin{equation}
+  V^*(s) = \max_\pi V^\pi(s)
+  \label{eq:opt_val}
+\end{equation}
+
+In terms of Q functions, the optimal value function may be written as:
+\begin{equation}
+  V^*(s) = \max_a \max_\pi Q^\pi(s, a) = \max_a Q^*(s, a)
+  \label{eq:opt_q}
+\end{equation}
+The policy which maximizes the value function or Q function is an
+optimal policy. It is given by
+\begin{equation}
+  \pi^* = \arg\max_\pi V^\pi(s) = \arg\max_\pi Q^\pi(s,a)
+  \label{eq:opt_policy}
+\end{equation}
+
+
+\subsection{Bellman Equation}
+\index{Markov Decision Process (MDP)!Bellman Equation}
+The Bellman Equation breaks down the value function into two parts:
+an immediate reward and a discounted future value function. In order
+to derive the Bellman equation, we will start with the state-value
+function given by equation \eqref{eq:value_func}.
+                       
+\begin{eqnarray}
+  V^\pi(s) &=& \mathbb{E}_\pi[G_t|s_t=s] \nonumber \\
+  &=& \mathbb{E}_\pi[r_{t+1} + \gamma r_{t+2} + \gamma^2 r_{t+3} +
+  \cdots|s_t=s]  \nonumber \nonumber \\
+  &=& \mathbb{E}_\pi[r_{t+1} + \gamma (r_{t+2} + \gamma r_{t+3} +
+  \cdots)|s_t=s ] \nonumber \\
+  &=& \mathbb{E}_\pi[r_{t+1} + \gamma\sum_{k=0}^\infty
+  \gamma^k r_{t+2+k}|s_t=s] \nonumber \\
+  &=& \mathbb{E}_\pi[r_{t+1} + \gamma G_{t+1}|s_t=s] \nonumber \\
+   &=& \mathbb{E}_\pi [r_{t+1}|s_t=s] + \gamma
+  E_\pi[G_{t+1}|s_t=s]
+  \quad \quad \text{\footnotesize Using Theorem \ref{th:exp_add}}  \nonumber \\
+    &=& \mathbb{E}_\pi [r_{t+1}|s_t=s] + \gamma
+    E_\pi[G_{t+1}|s_{t+1}=s'] \quad \quad \text{\footnotesize Markovian
+      Property: $G_{t+1}$ only depends on $s_{t+1}$ } \nonumber \\
+  &=& \mathbb{E}_\pi [r_{t+1}] + \gamma V^\pi(s_{t+1}) \nonumber
+  \\
+  V^\pi(s) &=& \mathbb{E}_\pi[r_{t+1} + \gamma V^\pi(s)|s_t=s]
+  \label{eq:be_value}
+\end{eqnarray}
+The above recursive equation is called the Bellman equation for the
+value function. Similarly, the Bellman equation for action-value
+function can be written as:
+
+\begin{equation}
+  Q^\pi(s,a) = \mathbb{E}_\pi[r_{t+1} + \gamma Q^\pi(s_{t+1},
+  a_{t+1})|s_t=s, a_t=a]
+  \label{eq:be_q}
+\end{equation}
+
+\subsection{Deriving Bellman equation}
+
+%Let us define $P^a_{ss'}$ as a transition probability of moving from
+%state $s$ to $s'$ while performing action $a$:
+%\begin{equation}
+%  P^a_{ss'} = P(s_{t+1}=s'|s_t=s,a_t=a)
+%  \label{eq:trans_prob}
+%\end{equation}
+%
+%The future return obtained by moving from $s$ to $s'$ through action
+%$a$ is defined as 
+%\begin{eqnarray}
+%  R^a_{ss'} &=& \mathbb{E}_\pi[G_{t+1}|s_t=s, s_{t+1}=s', a_t=a]
+%  \nonumber \\
+%  &=& \gamma \mathbb{E}_\pi[\sum_{k=0}^\infty \gamma^k
+%  r_{t+k+2}|s_{t+1}=s'] \quad \quad (\text{Using
+%    \eqref{eq:value_func}})
+%  \label{eq:future_return}
+%\end{eqnarray}
+
+Using \eqref{eq:value_func}, the value function can be re-written as:
+\begin{eqnarray}
+  V^\pi(s) &=& \mathbb{E}_\pi[G_t|s_t=s] = \mathbb{E}_\pi [r_{t+1} + \gamma \sum_{k=0}^\infty
+  \gamma^k r_{t+k+2}|s_t=s]  \nonumber \\
+  &=& \mathbb{E}_\pi[r_{t+1}|s_t=s] + \gamma \mathbb{E}_\pi[\sum_{k=0}^\infty
+  \gamma^k r_{t+k+2}|s_t=s] \nonumber \\
+  &=&  \mathbb{E}_\pi[r_{t+1}|s_t=s] + \gamma
+  \mathbb{E}_\pi[G_{t+1}|s_t=s]
+  \label{eq:value_func_2}
+\end{eqnarray}
+The first term in the above equation which is the expectation of
+$r_{t+1}$ given that we are in state $s$ can be written as: 
+\begin{equation}
+  \mathbb{E}_\pi[r_{t+1}|s_t=s] = \sum_{r \in \mathscr{R}} r p(r|s)
+  \label{eq:exp1}
+\end{equation}
+where $p(r|s)$ is the probability of appearance of reward $r$
+conditioned on state $s$. This $p(r|s)$ is a marginal distribution of
+distribution that also contained action $a$ taken at time $t$ and
+state $s'$ at time $t+1$ as shown below:
+
+\begin{equation}
+  p(r|s) = \sum_{s'\in \mathscr{S}}\sum_{a \in \mathscr{A}} p(s', a,
+  r|s) =  \sum_{s\in \mathscr{S}} \sum_{a \in \mathscr{A}} \pi(a|s)
+  p(s', r|a,s)
+  \label{eq:prs}
+\end{equation}
+where $p(a|s)=\pi(a|s)$ is the stochastic policy of the agent. The
+above equation makes use of the Bayes theorem of conditional
+probability \eqref{eq:bayes} provided in Appendix \ref{chap:app01}.
+Substituting \eqref{eq:prs} into \eqref{eq:exp1}, we get the first
+term of the value function \eqref{eq:value_func_2} as:
+\begin{equation}
+  \mathbb{E}_\pi[r_{t+1}|s_t=s] = \sum_{r\in \mathscr{R}} \sum_{s'
+    in \mathscr{S}} \sum_{a \in \mathscr{A}} r \pi(a|s) p(s',r|a,s)
+  \label{eq:v_part1}
+\end{equation}
+
+The expectation in the second term of \eqref{eq:value_func_2} can rewritten as follows by
+considering $G_{t+1}$ as a random variable that takes a finite number
+of values $g \in \Gamma$: 
+\begin{equation}
+  \mathbb{E}_\pi[G_{t+1}|s_t=s] = \sum_{g\in \Gamma} g p(g|s)
+  \label{eq:pgs}
+\end{equation} 
+
+Now, we again "de-marginalise" the probability distribution by using
+the law of multiplication as follows:
+
+\begin{eqnarray}
+  p(g|s) &=& \sum_{r\in \mathscr{R}} \sum_{s' \in \mathscr{S}} \sum_{a
+    \in \mathscr{A}} p(s',a,r,g|s) =  \sum_{r\in \mathscr{R}} \sum_{s'
+      \in \mathscr{S}} \sum_{a
+    \in \mathscr{A}} p(g|s', a, r, s) p(s',r,a|s) \nonumber \\
+    &=& \sum_{r\in \mathscr{R}}\sum_{s' \in \mathscr{S}} \sum_{a
+    \in \mathscr{A}}  p(g|s', a, r, s) p(s', r|a, s)\pi(a|s)\quad\quad
+    (\because
+    p(a|s) = \pi(a|s)) \nonumber \\
+    &=&  \sum_{r\in \mathscr{R}}\sum_{s' \in \mathscr{S}} \sum_{a
+    \in \mathscr{A}} p(g|s') p(s', r|a, s)\pi(a|s)
+  \label{eq:pgs_2}
+\end{eqnarray}
+In the last line of the above equations, we have used the Markovian
+property. Please note that $G_{t+1}$ is the sum of all future
+discounted rewards that the agent receives after the state $s'$. So,
+the future actions and the rewards depend only on the state in which
+the action is taken, so $p(g|s',a, r,s) = p(g|s')$, by assumption. So,
+by using \eqref{eq:pgs} and \eqref{eq:pgs_2}, 
+the second term of the value equation \eqref{eq:value_func_2} can
+rewritten as:
+
+\begin{eqnarray}
+  \gamma \mathbb{E}_\pi[G_{t+1}|s_t=s] &=&  \gamma  \sum_{g\in \Gamma} \sum_{r\in \mathscr{R}}\sum_{s' \in \mathscr{S}} \sum_{a
+    \in \mathscr{A}} gp(g|s') p(s', r|a, s)\pi(a|s) \nonumber \\
+    &=& \gamma  \sum_{r\in \mathscr{R}}\sum_{s' \in \mathscr{S}} \sum_{a
+      \in \mathscr{A}} \mathbb{E}_\pi[G_{t+1}|s_{t+1}=s']  p(s', r|a,
+      s)\pi(a|s) \nonumber \\
+         &=& \gamma  \sum_{r\in \mathscr{R}}\sum_{s' \in \mathscr{S}} \sum_{a
+      \in \mathscr{A}} V_\pi(s') p(s', r|a,
+      s)\pi(a|s)
+  \label{eq:v_part2}
+\end{eqnarray}
+
+Now substituting the two terms in \eqref{eq:value_func_2} using
+\eqref{eq:v_part1} and \eqref{eq:v_part2}, we get the final form of
+the Bellman equation given as:
+
+\begin{eqnarray}
+  V^\pi(s) &=& \mathbb{E}_\pi[G_t|s_t=s] \nonumber \\
+  &=& \sum_{a \in \mathscr{A}} \pi(a|s) \sum_{r \in \mathscr{R}}
+  \sum_{s' \in \mathscr{S}} p(s', r|a, s)[r + \gamma V^\pi(s')]
+  \label{eq:be_value_3}  
+\end{eqnarray}
+
+The Bellman equation for state-action or Q function can be similarly
+derived as follows (\textcolor{red}{Need to check this!!}):
+
+\begin{eqnarray}
+  Q^\pi(s,a) &=&   \sum_{r \in \mathscr{R}}
+  \sum_{s' \in \mathscr{S}} p(s',r|a,s)[r+\gamma \sum_{a'
+  \in\mathscr{A}} Q(s', a')] \nonumber \\
+            &=& \sum_{r \in \mathscr{R}}
+  \sum_{s' \in \mathscr{S}} p(s',r|a,s)[r+\gamma V^\pi(s')]
+  \label{eq:be_q_func_3}
+\end{eqnarray}
+
+\section{Solving the Bellman Equation}
+
+\subsection{Dynamic Programming}
+\index{Dynamic Programming}
+Dynamic programming (\gls{dp}) \cite{bellman1966dynamic} is an
+algorithmic technique for solving problems by breaking them down into
+smaller sub-problems and using the solutions to those subproblems to
+solve the original problem. It is a powerful technique that can be
+used to solve a wide variety of problems, including many that are
+difficult to solve with other methods.
+
+Dynamic programming works by storing the results of the subproblems in
+a table or array. This allows the algorithm to avoid re-computing the
+same sub-problems multiple times. The table is typically filled in
+bottom-up, starting with the smallest sub-problems and working up to
+the largest.
+
+We will solve the above Bellman equation using the following two
+powerful DP algorithms:
+\begin{itemize}
+  \item Value Iteration
+  \item Policy Iteration
+\end{itemize}
+
+\subsection{Value Iteration} \label{sec:value_iter}
+\index{Dynamic Programming!Value Iteration}     
+The steps involved in the value iteration algorithm are as follows:
+\begin{enumerate}
+  \item Initialize with the random value function with random values
+    for each state.
+  \item Compute Q function $Q(s,a)$ for all state and action pairs.
+  \item Update the value function with maximum value of $Q(s,a)$.
+  \item Repeat the above two steps (2-3) until convergence (change in
+    value function becomes very small.)
+\end{enumerate}
+
+The complete python code for value iteration algorithm is provided in
+the Listing \ref{lst:vi}. The first function
+\texttt{value\_iteration} computes the optimal value function by using
+the Bellman equation \eqref{eq:be_value_3} while the second function
+\texttt{extract\_policy} is used to compute the optimal policy from the
+above value function by using equation \eqref{eq:opt_policy}. This
+will be used to solve the Frozen Lake problem in the next subsection. 
+
+
+\begin{listing}
+\begin{pygments}[frame=single, indent=L]{python}
+class ValueIterationAgent():
+  def __init__(self, env, gamma=0.99, max_iterations=10000):
+    self.env = env
+    self.num_states = self.env.observation_space.n
+    self.num_actions = self.env.action_space.n
+    self.gamma = gamma
+    self.max_iterations = max_iterations
+
+  def value_iteration(self, threshold=1e-20):
+    value_table = np.zeros(self.num_states)
+    for i in range(self.max_iterations):
+      updated_value_table = np.copy(value_table)
+      for state in range(self.num_states):
+        Q_value = []  # Q(s,a)
+        for action in range(self.num_actions):
+          Q_value.append(np.sum(
+          [trans_prob * \
+          (reward + self.gamma * updated_value_table[next_state]) \
+          for trans_prob, next_state, reward, _ \ 
+                           in self.env.P[state][action]]))
+        value_table[state] =  max(Q_value)
+      if (np.sum(
+            np.fabs(updated_value_table - value_table)) <= threshold):
+        print("Value-iteration converged at iteration # %d" % (i+1))
+        break
+    return value_table
+
+  def extract_policy(self, value_table):
+    policy = np.zeros(self.num_states)
+    for state in range(self.num_states):
+      Q_table = np.zeros(self.num_actions)
+      for action in range(self.num_actions):
+        Q_table[action] = np.sum(
+        [trans_prob * \
+        (reward + self.gamma * value_table[next_state])\
+        for trans_prob, next_state, reward, _ \
+                  in self.env.P[state][action]])
+      policy[state] = np.argmax(Q_table)
+    return policy
+
+  def train_and_validate(self, max_episodes=10):
+    # Compute optimal policy
+    optimal_value = self.value_iteration()
+    optimal_policy = self.extract_policy(optimal_value)
+    ep_rewards, ep_steps = [], []   
+    done = False
+    for i in range(max_episodes):
+      rewards = 0
+      done = False
+      state = self.env.reset()[0]
+      step = 0
+      while not done:
+        step += 1
+        action = optimal_policy[state]
+        next_state, reward, done, _, _ = env.step(int(action))   
+        screen = env.render()
+        rewards += reward
+        state = next_state
+      ep_rewards.append(rewards)
+      ep_steps.append(step)
+    return np.mean(ep_rewards), np.mean(ep_steps)
+
+  def __del__(self):
+    self.env.close()
+\end{pygments}
+\caption{Python class for implementing value iteration algorithm.}
+\label{lst:vi}
+\end{listing}
+
+\subsection{Policy Iteration} \label{sec:policy_iter}
+\index{Dynamic Programming!Policy Iteration}
+Policy iteration involves the following steps:
+\begin{enumerate}
+  \item Start with a random policy. 
+  \item Find the value function for this policy. Evaluate to see if it
+    is optimal - \emph{Policy Evaluation}. 
+  \item If the policy is not optimal, find a new improved policy -
+    \emph{Policy improvement}.
+  \item Repeat the above two steps (2-3) until optimal policy is
+    found.
+\end{enumerate}
+
+The complete code for policy iteration algorithm is provided in the
+Listing \ref{lst:pi}.  The \texttt{policy\_iteration} method calls two
+functions, namely, \texttt{evaluate\_policy} and
+\texttt{improve\_policy}. This code learns a deterministic policy
+$a=\pi(s)$.  It is also possible to learn a stochastic policy
+$\pi(s,a)$ as shown in the implementation provided in Listing
+\ref{lst:pi_2}. In this implementation, the policy function is
+represented by a matrix representing the probability of an action for
+a given state. Initially, all actions are assigned equal probability. 
+
+   \begin{listing}
+     \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+import numpy as np
+
+class PolicyIterationAgent():
+  def __init__(self, env, gamma=0.99, max_iterations=10000):
+    self.env = env
+    self.num_states = self.env.observation_space.n
+    self.num_actions = self.env.action_space.n
+    self.gamma = gamma
+    self.max_iterations = max_iterations
+
+  def evaluate_policy(self, policy, threshold=1e-10):
+    value_table = np.zeros(self.num_states)
+    while True:
+      updated_value_table = np.copy(value_table) 
+      for state in range(self.num_states):
+        action = policy[state]
+        value_table[state] = np.sum(
+        [trans_prob *   \
+        (reward + self.gamma * updated_value_table[next_state])\
+        for trans_prob, next_state, reward, _ in env.P[state][action]])
+      if (np.sum(
+         np.fabs(updated_value_table - value_table)) <= threshold):
+        break
+    return value_table
+
+  def improve_policy(self, value_table):
+    policy = np.zeros(self.num_states)
+    for state in range(self.num_states):
+      Q_table = np.zeros(self.num_actions)
+      for action in range(self.num_actions):
+        Q_table[action] = np.sum(
+        [trans_prob * \
+        (reward + self.gamma * value_table[next_state]) \
+        for trans_prob, next_state, reward, _ \
+                     in self.env.P[state][action]])
+      policy[state] = np.argmax(Q_table)
+    return policy
+
+  def policy_iteration(self):
+    current_policy = np.zeros(self.num_states) 
+    for i in range(self.max_iterations):
+      new_value_function = self.evaluate_policy(current_policy)
+      new_policy = self.improve_policy(new_value_function)
+      if (np.all(current_policy == new_policy)):
+        print('Policy iteration converged at step %d.' %(i+1))
+        current_policy = new_policy
+        break
+      current_policy = new_policy
+    return new_policy
+
+  def train_and_validate(self, max_episodes=10):
+    # compute optimal policy
+    optimal_policy = self.policy_iteration()
+    ep_rewards, ep_steps = [], []   
+    done = False
+    for i in range(max_episodes):
+      rewards = 0
+      done = False
+      state = self.env.reset()[0]
+      step = 0
+      while not done:
+        step += 1
+        action = optimal_policy[state]
+        next_state, reward, done, _, _ = env.step(int(action))
+        rewards += reward
+        state = next_state
+      ep_rewards.append(rewards)
+      ep_steps.append(step)
+    return np.mean(ep_rewards), np.mean(ep_steps)
+
+  def __del__(self):   # destructor 
+    self.env.close()
+       
+     \end{pygments}
+     \caption{Python class for implementing Policy iteration
+     algorithm.}
+     \label{lst:pi}
+   \end{listing}
+
+
+   \begin{listing}
+     \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+import numpy as np
+class PolicyIterationAgent2():
+  def __init__(self, env, gamma=0.99, max_iterations=100000, threshold=1e-6):
+    self.env = env
+    self.num_states = self.env.observation_space.n
+    self.num_actions = self.env.action_space.n
+    self.gamma = gamma
+    self.max_iterations = max_iterations
+    self.threshold = threshold
+
+  def policy_evaluation(self, policy):
+    value_fn = np.zeros(self.num_states)
+    i = 0
+    while True:
+      i += 1
+      prev_value_fn = np.copy(value_fn)
+      for state in range(self.num_states):
+        outersum = 0
+        for action in range(self.num_actions):
+          q_value = np.sum(
+              [trans_prob * \
+              (reward + self.gamma * prev_value_fn[next_state]) \
+              for trans_prob, next_state, reward, _ \
+                                in self.env.P[state][action]])
+          outersum += policy[state, action] * q_value
+        value_fn[state] = outersum
+      if (np.max(np.fabs(prev_value_fn - value_fn)) < self.threshold):
+        print('Value convergences in %d iteration' %(i+1))
+        break
+    return value_fn
+
+  def policy_improvement(self, value_fn):
+    q_value = np.zeros((self.num_states, self.num_actions))
+    improved_policy = np.zeros((self.num_states, self.num_actions))
+    for state in range(self.num_states):
+      for action in range(self.num_actions):
+        q_value[state, action] = np.sum(
+            [trans_prob * \
+            (reward + self.gamma * value_fn[next_state]) \
+            for trans_prob, next_state, reward, _ \
+                                in self.env.P[state][action]])
+      best_action_indices = np.where(q_value[state,:] \ 
+                           == np.max(q_value[state,:]))[0]
+      for index in best_action_indices:
+        improved_policy[state, index] = 1/np.size(best_action_indices)
+    return improved_policy
+
+
+  def policy_iteration(self):
+    # start with uniform probability for all actions
+    initial_policy = (1.0/self.num_actions) * \
+            np.ones((self.num_states, self.num_actions))  # \pi(s,a)
+    for i in range(self.max_iterations):
+      if i == 0:
+        current_policy = initial_policy
+      current_value = self.policy_evaluation(current_policy)
+      improved_policy = self.policy_improvement(current_value)
+      if np.allclose(current_policy, improved_policy, \
+                                 rtol=1e-10, atol=1e-15):
+        print(f'Policy Iteration converged in {i+1} iterations.' )
+        current_policy = improved_policy
+        break
+      current_policy = improved_policy
+    return current_policy
+
+
+  def train_and_validate(self, max_episodes=10):
+    # compute optimal policy
+    optimal_policy = self.policy_iteration()
+    ep_rewards, ep_steps = [], []   
+    done = False
+    for i in range(max_episodes):
+      rewards = 0
+      done = False
+      state = self.env.reset()[0]
+      step = 0
+      while not done:
+        step += 1
+        action = np.argmax(optimal_policy[state, :])
+        next_state, reward, done, _, _ = env.step(int(action))
+        rewards += reward
+        state = next_state
+      ep_rewards.append(rewards)
+      ep_steps.append(step)
+    return np.mean(ep_rewards), np.mean(ep_steps)
+
+  def __del__(self): # destructor
+    self.env.close()
+ 
+     \end{pygments}
+     \caption{Python code for Policy Iteration Algorithm for learning
+     a stochastic policy distribution $\pi(s,a)$.}
+     \label{lst:pi_2}
+   \end{listing}
+
+\subsection{Solving the Frozen Lake Problem}
+\index{Environment!Gym!Frozen Lake Problem}
+Frozen Lake is a toy text environment from Gymnasium \cite{gym} which
+involves crossing a frozen lake from start to goal without falling
+into any holes by walking over the frozen lake. The player may not
+always move in the intended direction due to the slippery nature of
+the frozen lake.  The game starts with the player at location [0,0] of
+the frozen lake grid world with the goal located at far extent of the
+world e.g. [3,3] for the 4x4 environment.  The player can be in any of
+the 16 discrete states and can take one of the four actions (move
+left, right, top or down). The agent receives a reward of 1.0 only when it
+reaches the goal. Otherwise it receives a zero reward for all other
+states. The initial and the final state with success (reward = 1.0) is
+shown in the Figure \ref{fig:flake}. 
+
+\begin{figure}[htbp]
+  \centering                                 
+  \begin{tabular}{cc}
+  \includegraphics[scale=0.5]{./figures/chap02/frozen_lake.png} & 
+  \includegraphics[scale=0.5]{./figures/chap02/frozen_lake_r1.png} \\
+  (a) Initial state  & (b) Final successful state 
+\end{tabular}
+  \caption{Visualization of the Frozen Lake Environment}
+  \label{fig:flake}
+\end{figure}
+
+The code for solving this problem by using value iteration and policy
+iteration algorithm is provided in Listing \ref{lst:fl_vi_pi}. It is
+seen that the algorithms are able to solve the problem at least 8
+times out of 10 episodes indicating a success rate of about 80\%. 
+
+
+\begin{listing}
+\begin{pygments}[frame=single,indent=L]{python}
+import gymnasium as gym    
+import numpy as np
+
+# stochastic environment
+env = gym.make('FrozenLake-v1', map_name="4x4", 
+               is_slippery=True, render_mode="rgb_array")
+state = env.reset()
+print('state: ', state)
+print("Observation space dimension: ", env.observation_space.n)
+print("Action space dimension:", env.action_space.n)
+print("Value Iteration Algorithm:")
+agent = ValueIterationAgent(env)
+mean_rewards, mean_steps = agent.train_and_validate()
+print(f'mean episodic reward: {mean_rewards}, \
+      average steps per episode: {mean_steps}')
+print("--------------------------")
+print("Policy Iteration Algorithm:")
+p_agent = PolicyIterationAgent(env)
+mean_reward, mean_steps = p_agent.train_and_validate(max_episodes=10)
+print(f'Mean rewards: {mean_reward}  Mean steps: {mean_steps}.')
+\end{pygments}
+\begin{framed}
+\noindent Program output: 
+\begin{verbatim}
+state: (0, {'prob': 1})
+Observation space dimension:  16
+Action space dimension: 4
+Value Iteration Algorithm:
+Value-iteration converged at iteration # 996
+mean episodic reward: 0.8, average steps per episode: 68.2
+---------------------------------
+Policy Iteration Algorithm:
+Policy iteration converged at step 7.
+Mean rewards: 1.0  Mean steps: 54.2.
+
+\end{verbatim}
+\end{framed}
+  \caption{Applying value iteration algorithm to solve the Frozen Lake
+  Problem}
+  \label{lst:fl_vi_pi}
+\end{listing}
+
+\subsection{Solving the Taxi Problem}
+\index{Environment!Gym!Taxi-v3 problem}
+The Taxi problem involves navigating to passengers in a grid world,
+picking them up and dropping them off at one of the four locations.
+There are four designated pick-up and drop-off locations (Red, Green,
+Yellow and Blue) in the 5x5 grid world. The taxi starts off at a
+random square and the passenger at one of the designated locations.
+
+The goal is move the taxi to the passenger’s location, pick up the
+passenger, move to the passenger’s desired destination, and drop off
+the passenger. Once the passenger is dropped off, the episode ends.
+
+The player receives positive rewards for successfully dropping-off the
+passenger at the correct location. Negative rewards for incorrect
+attempts to pick-up/drop-off passenger and for each step where another
+reward is not received.  Two snap-shots of the taxi environment is
+shown in Figure \ref{fig:taxi}. A random policy performs poorly
+resulting in highly negative average rewards as shown in listing
+\ref{lst:random}. 
+
+\begin{figure}[!t]
+  \centering
+  \begin{tabular}{cc}
+    \includegraphics[scale=0.5]{./figures/chap02/taxi_v3_1.png} & 
+    \includegraphics[scale=0.5]{./figures/chap02/taxi_v3_final.png} \\
+    (a) Initial state  & (b) Final successful state
+  \end{tabular}
+  \caption{Visualization of The Taxi-v3 environment}
+  \label{fig:taxi}
+\end{figure}
+
+\begin{listing}
+  \begin{pygments}[frame=single,indent=L]{python}
+import gymnasium as gym
+env = gym.make("Taxi-v3", render_mode="rgb_array") 
+state = env.reset()
+print('state:', state)
+print('size of state space: ', env.observation_space.n)
+print('size of action space: ', env.action_space.n)
+print('Scores with random policy:')
+ep_rewards, ep_steps = [], []
+for i in range(10):
+  state = env.reset()[0]
+  done = False
+  step = 0
+  rewards = 0
+  while not done:
+    step += 1
+    action = env.action_space.sample()
+    next_state, reward, done, _ ,_= env.step(action)
+    rewards += reward
+    state = next_state
+  ep_rewards.append(rewards)
+  ep_steps.append(step)
+print('Mean episodic Reward: ', np.mean(ep_rewards))
+print('Mean episodic steps: ', np.mean(ep_steps))
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+ Scores with random policy:
+ Mean episodic Reward:  -9473.9
+Mean episodic steps:  2428.1
+    \end{verbatim}
+  \end{framed}
+  \caption{The performance of Random Policy for the Taxi environment}
+  \label{lst:random}
+\end{listing}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+env = gym.make("Taxi-v3") 
+print('Policy Iteration:')
+agent = PolicyIterationAgent(env)
+mean_rewards, mean_steps  = agent.train_and_validate()
+print(f'Avg rewards: {mean_rewards}, Avg steps: {mean_steps}')
+print("------------------------")
+print('Value Iteration:')
+v_agent = ValueIterationAgent(env)
+mean_rewards, mean_steps = agent.train_and_validate()
+print(f'Avg rewards: {mean_rewards}, Avg steps: {mean_steps}')
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+Policy Iteration:
+Policy iteration converged at step 17.
+Avg rewards: 7.3, Avg steps: 13.7   
+-------------------------------------
+Value Iteration:
+Value-iteration converged at iteration # 3325
+Avg rewards: 7.2, Avg steps: 13.8
+    \end{verbatim}
+  \end{framed}
+\end{listing}
+
+
+\section{Summary}
+In this chapter, the mathematical framework for solving the
+reinforcement learning (RL) problem is presented. It is formulated as
+a Markov Decision Process (MDP) where the future state depends on the
+current state. The aim of the RL agent is to maximize the cumulative
+future reward starting from the current state. This is achieved by
+solving the Bellman equation. Two algorithms, namely, value-iteration
+and policy-iteration algorithm are  used for solving The Frozen Lake
+and the Taxi problem.
+
+
+

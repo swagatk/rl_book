@@ -1,0 +1,4007 @@
+=>PYTHONTEX#PYGpython#default#defaultverb#0#verbatim###frame=single, indent=L#chap02.tex#347#
+class ValueIterationAgent():
+  def __init__(self, env, gamma=0.99, max_iterations=10000):
+    self.env = env
+    self.num_states = self.env.observation_space.n
+    self.num_actions = self.env.action_space.n
+    self.gamma = gamma
+    self.max_iterations = max_iterations
+
+  def value_iteration(self, threshold=1e-20):
+    value_table = np.zeros(self.num_states)
+    for i in range(self.max_iterations):
+      updated_value_table = np.copy(value_table)
+      for state in range(self.num_states):
+        Q_value = []  # Q(s,a)
+        for action in range(self.num_actions):
+          Q_value.append(np.sum(
+          [trans_prob * \
+          (reward + self.gamma * updated_value_table[next_state]) \
+          for trans_prob, next_state, reward, _ \
+                           in self.env.P[state][action]]))
+        value_table[state] =  max(Q_value)
+      if (np.sum(
+            np.fabs(updated_value_table - value_table)) <= threshold):
+        print("Value-iteration converged at iteration # %d" % (i+1))
+        break
+    return value_table
+
+  def extract_policy(self, value_table):
+    policy = np.zeros(self.num_states)
+    for state in range(self.num_states):
+      Q_table = np.zeros(self.num_actions)
+      for action in range(self.num_actions):
+        Q_table[action] = np.sum(
+        [trans_prob * \
+        (reward + self.gamma * value_table[next_state])\
+        for trans_prob, next_state, reward, _ \
+                  in self.env.P[state][action]])
+      policy[state] = np.argmax(Q_table)
+    return policy
+
+  def train_and_validate(self, max_episodes=10):
+    # Compute optimal policy
+    optimal_value = self.value_iteration()
+    optimal_policy = self.extract_policy(optimal_value)
+    ep_rewards, ep_steps = [], []
+    done = False
+    for i in range(max_episodes):
+      rewards = 0
+      done = False
+      state = self.env.reset()[0]
+      step = 0
+      while not done:
+        step += 1
+        action = optimal_policy[state]
+        next_state, reward, done, _, _ = env.step(int(action))
+        screen = env.render()
+        rewards += reward
+        state = next_state
+      ep_rewards.append(rewards)
+      ep_steps.append(step)
+    return np.mean(ep_rewards), np.mean(ep_steps)
+
+  def __del__(self):
+    self.env.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#1#verbatim###frame=single, indent=L#chap02.tex#441#
+import gymnasium as gym
+import numpy as np
+
+class PolicyIterationAgent():
+  def __init__(self, env, gamma=0.99, max_iterations=10000):
+    self.env = env
+    self.num_states = self.env.observation_space.n
+    self.num_actions = self.env.action_space.n
+    self.gamma = gamma
+    self.max_iterations = max_iterations
+
+  def evaluate_policy(self, policy, threshold=1e-10):
+    value_table = np.zeros(self.num_states)
+    while True:
+      updated_value_table = np.copy(value_table)
+      for state in range(self.num_states):
+        action = policy[state]
+        value_table[state] = np.sum(
+        [trans_prob *   \
+        (reward + self.gamma * updated_value_table[next_state])\
+        for trans_prob, next_state, reward, _ in env.P[state][action]])
+      if (np.sum(
+         np.fabs(updated_value_table - value_table)) <= threshold):
+        break
+    return value_table
+
+  def improve_policy(self, value_table):
+    policy = np.zeros(self.num_states)
+    for state in range(self.num_states):
+      Q_table = np.zeros(self.num_actions)
+      for action in range(self.num_actions):
+        Q_table[action] = np.sum(
+        [trans_prob * \
+        (reward + self.gamma * value_table[next_state]) \
+        for trans_prob, next_state, reward, _ \
+                     in self.env.P[state][action]])
+      policy[state] = np.argmax(Q_table)
+    return policy
+
+  def policy_iteration(self):
+    current_policy = np.zeros(self.num_states)
+    for i in range(self.max_iterations):
+      new_value_function = self.evaluate_policy(current_policy)
+      new_policy = self.improve_policy(new_value_function)
+      if (np.all(current_policy == new_policy)):
+        print('Policy iteration converged at step %d.' %(i+1))
+        current_policy = new_policy
+        break
+      current_policy = new_policy
+    return new_policy
+
+  def train_and_validate(self, max_episodes=10):
+    # compute optimal policy
+    optimal_policy = self.policy_iteration()
+    ep_rewards, ep_steps = [], []
+    done = False
+    for i in range(max_episodes):
+      rewards = 0
+      done = False
+      state = self.env.reset()[0]
+      step = 0
+      while not done:
+        step += 1
+        action = optimal_policy[state]
+        next_state, reward, done, _, _ = env.step(int(action))
+        rewards += reward
+        state = next_state
+      ep_rewards.append(rewards)
+      ep_steps.append(step)
+    return np.mean(ep_rewards), np.mean(ep_steps)
+
+  def __del__(self):   # destructor
+    self.env.close()
+
+=>PYTHONTEX#PYGpython#default#defaultverb#2#verbatim###frame=single, indent=L#chap02.tex#524#
+import gymnasium as gym
+import numpy as np
+class PolicyIterationAgent2():
+  def __init__(self, env, gamma=0.99, max_iterations=100000, threshold=1e-6):
+    self.env = env
+    self.num_states = self.env.observation_space.n
+    self.num_actions = self.env.action_space.n
+    self.gamma = gamma
+    self.max_iterations = max_iterations
+    self.threshold = threshold
+
+  def policy_evaluation(self, policy):
+    value_fn = np.zeros(self.num_states)
+    i = 0
+    while True:
+      i += 1
+      prev_value_fn = np.copy(value_fn)
+      for state in range(self.num_states):
+        outersum = 0
+        for action in range(self.num_actions):
+          q_value = np.sum(
+              [trans_prob * \
+              (reward + self.gamma * prev_value_fn[next_state]) \
+              for trans_prob, next_state, reward, _ \
+                                in self.env.P[state][action]])
+          outersum += policy[state, action] * q_value
+        value_fn[state] = outersum
+      if (np.max(np.fabs(prev_value_fn - value_fn)) < self.threshold):
+        print('Value convergences in %d iteration' %(i+1))
+        break
+    return value_fn
+
+  def policy_improvement(self, value_fn):
+    q_value = np.zeros((self.num_states, self.num_actions))
+    improved_policy = np.zeros((self.num_states, self.num_actions))
+    for state in range(self.num_states):
+      for action in range(self.num_actions):
+        q_value[state, action] = np.sum(
+            [trans_prob * \
+            (reward + self.gamma * value_fn[next_state]) \
+            for trans_prob, next_state, reward, _ \
+                                in self.env.P[state][action]])
+      best_action_indices = np.where(q_value[state,:] \
+                           == np.max(q_value[state,:]))[0]
+      for index in best_action_indices:
+        improved_policy[state, index] = 1/np.size(best_action_indices)
+    return improved_policy
+
+
+  def policy_iteration(self):
+    # start with uniform probability for all actions
+    initial_policy = (1.0/self.num_actions) * \
+            np.ones((self.num_states, self.num_actions))  # \pi(s,a)
+    for i in range(self.max_iterations):
+      if i == 0:
+        current_policy = initial_policy
+      current_value = self.policy_evaluation(current_policy)
+      improved_policy = self.policy_improvement(current_value)
+      if np.allclose(current_policy, improved_policy, \
+                                 rtol=1e-10, atol=1e-15):
+        print(f'Policy Iteration converged in {i+1} iterations.' )
+        current_policy = improved_policy
+        break
+      current_policy = improved_policy
+    return current_policy
+
+
+  def train_and_validate(self, max_episodes=10):
+    # compute optimal policy
+    optimal_policy = self.policy_iteration()
+    ep_rewards, ep_steps = [], []
+    done = False
+    for i in range(max_episodes):
+      rewards = 0
+      done = False
+      state = self.env.reset()[0]
+      step = 0
+      while not done:
+        step += 1
+        action = np.argmax(optimal_policy[state, :])
+        next_state, reward, done, _, _ = env.step(int(action))
+        rewards += reward
+        state = next_state
+      ep_rewards.append(rewards)
+      ep_steps.append(step)
+    return np.mean(ep_rewards), np.mean(ep_steps)
+
+  def __del__(self): # destructor
+    self.env.close()
+
+=>PYTHONTEX#PYGpython#default#defaultverb#3#verbatim###frame=single,indent=L#chap02.tex#654#
+import gymnasium as gym
+import numpy as np
+
+# stochastic environment
+env = gym.make('FrozenLake-v1', map_name="4x4",
+               is_slippery=True, render_mode="rgb_array")
+state = env.reset()
+print('state: ', state)
+print("Observation space dimension: ", env.observation_space.n)
+print("Action space dimension:", env.action_space.n)
+print("Value Iteration Algorithm:")
+agent = ValueIterationAgent(env)
+mean_rewards, mean_steps = agent.train_and_validate()
+print(f'mean episodic reward: {mean_rewards}, \
+      average steps per episode: {mean_steps}')
+print("--------------------------")
+print("Policy Iteration Algorithm:")
+p_agent = PolicyIterationAgent(env)
+mean_reward, mean_steps = p_agent.train_and_validate(max_episodes=10)
+print(f'Mean rewards: {mean_reward}  Mean steps: {mean_steps}.')
+=>PYTHONTEX#PYGpython#default#defaultverb#4#verbatim###frame=single,indent=L#chap02.tex#729#
+import gymnasium as gym
+env = gym.make("Taxi-v3", render_mode="rgb_array")
+state = env.reset()
+print('state:', state)
+print('size of state space: ', env.observation_space.n)
+print('size of action space: ', env.action_space.n)
+print('Scores with random policy:')
+ep_rewards, ep_steps = [], []
+for i in range(10):
+  state = env.reset()[0]
+  done = False
+  step = 0
+  rewards = 0
+  while not done:
+    step += 1
+    action = env.action_space.sample()
+    next_state, reward, done, _ ,_= env.step(action)
+    rewards += reward
+    state = next_state
+  ep_rewards.append(rewards)
+  ep_steps.append(step)
+print('Mean episodic Reward: ', np.mean(ep_rewards))
+print('Mean episodic steps: ', np.mean(ep_steps))
+=>PYTHONTEX#PYGpython#default#defaultverb#5#verbatim###frame=single, indent=L#chap02.tex#766#
+env = gym.make("Taxi-v3")
+print('Policy Iteration:')
+agent = PolicyIterationAgent(env)
+mean_rewards, mean_steps  = agent.train_and_validate()
+print(f'Avg rewards: {mean_rewards}, Avg steps: {mean_steps}')
+print("------------------------")
+print('Value Iteration:')
+v_agent = ValueIterationAgent(env)
+mean_rewards, mean_steps = agent.train_and_validate()
+print(f'Avg rewards: {mean_rewards}, Avg steps: {mean_steps}')
+=>PYTHONTEX#PYGpython#default#defaultverb#6#verbatim###frame=single, indent=L#chap03.tex#74#
+import math
+def deg2rad(deg):
+  return deg * math.pi / 180
+
+#estimate pi
+import matplotlib.pyplot as plt
+import numpy as np
+pi_estimate = []
+for n in range(1, 10000):
+  s = np.random.uniform(0, 1.0, size=(n, 2))  # x,y points
+  r = np.sqrt(np.sum(s**2, axis=1))   # r = sqrt(x^2 + y^2)
+  c = np.sum(r < 1)                   # count points having r < 1
+  pi_estimate.append(4 * c / n)
+
+#plotting sample points
+cin = s[r < 1] # points inside the circle
+cout = s[r > 1] # points outside the circle
+plt.scatter(cin[:,0], cin[:,1], s=1, label='points inside circle')
+plt.scatter(cout[:,0], cout[:,1], s=1, label='points outside circle')
+plt.xlabel('X')
+plt.ylabel('Y')
+# draw the circle
+theta = np.linspace(0, deg2rad(90), 1000)
+radius = 1
+x = radius * np.sin(theta)
+y = radius * np.cos(theta)
+plt.plot(x, y, c='black')
+
+# new plot
+plt.figure()
+plt.plot(pi_estimate, label='estimate')
+plt.plot(3.14*np.ones_like(pi_estimate), c='r', label='3.14')
+plt.xlabel('Number of samples (n)')
+plt.ylabel('Estimate of $\pi$')
+plt.grid(color='gray')
+plt.legend(loc='best')
+=>PYTHONTEX#PYGpython#default#defaultverb#7#verbatim###frame=single, indent=L#chap03.tex#241#
+import sys
+import gymnasium as gym
+import matplotlib.pyplot as plt
+env = gym.make('Blackjack-v1', render_mode="rgb_array")
+state = env.reset()
+print('state:', state)
+action = env.action_space.sample()
+print('Step function output: ', env.step(action))
+print('Observation space: ', env.observation_space.spaces)
+print('Action values:', env.action_space.n)
+screen = env.render()
+plt.imshow(screen)
+plt.axis('off')
+=>PYTHONTEX#PYGpython#default#defaultverb#8#verbatim###frame=single, indent=L#chap03.tex#342#
+from collections import defaultdict
+import numpy as np
+import random
+class MCPAgent:
+  def __init__(self, env, gamma=0.99):
+    self.env = env
+    self.n_actions = env.action_space.n
+    self.gamma = gamma
+    print('Environment: ', self.env.spec.name)
+
+  def sample_policy(self, obs):
+    player_sum, dealer_show, usable_ace = obs
+    probs = [0.8, 0.2] if player_sum > 18 else [0.2, 0.8]
+    action = np.random.choice(np.arange(2), p=probs)
+    return action
+
+  def generate_episode(self):
+    """ Plays a single episode with a set policy.
+    Records the state, action and reward for each step
+    returns all the timesteps for the episode.  """
+    episode = []
+    state = env.reset()[0]
+    while True:
+      action = self.sample_policy(state)
+      next_state, reward, done, info, _ = env.step(action)
+      episode.append((state, action, reward))
+      state = next_state
+      if done:
+        break
+    return episode
+
+def update_Q_first_visit(self, episode, Q, returns_sum, N, method=1):
+    G = 0
+    visited_state = set()
+    for i in range(len(episode)-1, -1, -1):    # traverse in reverse order
+      state, action, reward = episode[i]
+      G += self.gamma ** i * reward # returns for (s,a)
+      if (state, action) not in visited_state:    # if first visit
+        N[state][action] += 1  # first visit count
+        if method == 1:
+          returns_sum[state][action] += G  # update returns
+          Q[state][action] = returns_sum[state][action] / N[state][action]
+        else:
+          returns_sum[state][action] = G # update returns
+          Q[state][action] += (returns_sum[state][action] -
+                           Q[state][action])/ N[state][action]
+        visited_state.add((state, action))
+
+  def update_Q_every_visit(self, episode, Q, returns_sum, N, method=1):
+    G = 0  # return
+    for i in range(len(episode)-1, -1, -1):
+      s, a, r = episode[i]
+      G += self.gamma ** i * r  # returns for (s,a)
+      N[s][a] += 1    # every-visit count
+      if method == 1:
+        returns_sum[s][a] += G
+        Q[s][a] = returns_sum[s][a] / N[s][a]
+      else:
+        returns_sum[s][a] = G
+        Q[s][a] += (returns_sum[s][a] - Q[s][a]) / N[s][a]
+
+  def mc_predict(self, num_episodes=100000, first_visit=False, method=1):
+    """ This plays through several episodes of the game """
+    returns_sum = defaultdict(lambda: np.zeros(self.env.action_space.n))
+    N = defaultdict(lambda: np.zeros(self.env.action_space.n))
+    Q = defaultdict(lambda: np.zeros(self.env.action_space.n))
+    for i in range(1, num_episodes+1):
+      if i % 1000 == 0:
+        print('\rEpisode: {}/{}.'.format(i, num_episodes), end="")
+        sys.stdout.flush()
+      episode = self.generate_episode()
+      if first_visit:
+        self.update_Q_first_visit(episode, Q, returns_sum, N, method)
+      else:
+        self.update_Q_every_visit(episode, Q, returns_sum, N, method)
+    return Q
+
+  def QtoV(self, Q):
+    ''' Converts Q to V '''
+    V = dict((k, (k[0]>18) * (np.dot([0.8, 0.2], v)) + \
+     (k[0] <= 18) * (np.dot([0.2, 0.8], v))) for k, v in Q.items())
+    return V
+
+if __name__ == '__main__':
+  agent = MCPAgent(env)
+  Q = agent.mc_predict(num_episodes=500000, method=2)
+  V = agent.QtoV(Q)
+=>PYTHONTEX#PYGpython#default#defaultverb#9#verbatim###frame=single, indent=L#chap03.tex#438#
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+def plot_blackjack_values(V):
+  def get_Z(x, y, usable_ace):
+    if (x,y,usable_ace) in V:
+        return V[x,y,usable_ace]
+    else:
+        return 0
+
+  def get_figure(usable_ace, ax):
+    x_range = np.arange(11, 22)
+    y_range = np.arange(1, 11)
+    X, Y = np.meshgrid(x_range, y_range)
+    Z = np.array([get_Z(x,y,usable_ace) \
+            for x,y in zip(np.ravel(X), np.ravel(Y))]).reshape(X.shape)
+    surf = ax.plot_surface(X, Y, Z, rstride=1, \
+            cstride=1, cmap=plt.cm.coolwarm, vmin=-1.0, vmax=1.0)
+    ax.set_xlabel('Player\'s Current Sum')
+    ax.set_ylabel('Dealer\'s Showing Card')
+    ax.set_zlabel('State Value')
+    ax.view_init(ax.elev, -120)
+
+  fig = plt.figure(figsize=(20, 20))
+  ax = fig.add_subplot(121, projection='3d')
+  ax.set_title('Usable Ace')
+  get_figure(True, ax)
+  ax = fig.add_subplot(122, projection='3d')
+  ax.set_title('No Usable Ace')
+  get_figure(False, ax)
+  plt.show()
+
+  # code for plotting policy
+ def plot_blackjack_policy(policy):
+
+  def get_Z(x, y, usable_ace):
+    if (x,y,usable_ace) in policy:
+      return policy[x,y,usable_ace]
+    else:
+      return 1
+
+  def get_figure(usable_ace, ax):
+    x_range = np.arange(11, 22)
+    y_range = np.arange(10, 0, -1)
+    X, Y = np.meshgrid(x_range, y_range)
+    Z = np.array([[get_Z(x,y,usable_ace) for x in x_range] for y in y_range])
+    surf = ax.imshow(Z, cmap=plt.get_cmap('Pastel2', 2), \
+                     vmin=0, vmax=1, extent=[10.5, 21.5, 0.5, 10.5])
+    plt.xticks(x_range)
+    plt.yticks(y_range)
+    plt.gca().invert_yaxis()
+    ax.set_xlabel('Player\'s Current Sum')
+    ax.set_ylabel('Dealer\'s Showing Card')
+    ax.grid(color='w', linestyle='-', linewidth=1)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+    cbar = plt.colorbar(surf, ticks=[0,1], cax=cax)
+    cbar.ax.set_yticklabels(['0 (STICK)','1 (HIT)'])
+
+  fig = plt.figure(figsize=(15, 15))
+  ax = fig.add_subplot(121)
+  ax.set_title('Usable Ace')
+  get_figure(True, ax)
+  ax = fig.add_subplot(122)
+  ax.set_title('No Usable Ace')
+  get_figure(False, ax)
+  plt.show()
+=>PYTHONTEX#PYGpython#default#defaultverb#10#verbatim###frame=single, indent=L#chap03.tex#531#
+  def update_Q_first_visit(self, episode, Q, returns_sum, N, method=1):
+    """
+    Another implementation of First Visit Monte-Carlo update of Q values.
+    """
+    for s, a, r in episode:
+      first_occurrence_idx = next(i \
+              for i, x in enumerate(episode) if x[0] == s)
+      G = sum([x[2] * (self.gamma ** i) \
+              for i, x in enumerate(episode[first_occurrence_idx:])])
+      N[s][a] += 1  # first visit count for (s,a)
+      if method == 1:
+        returns_sum[s][a] += G
+        Q[s][a] = returns_sum[s][a] / N[s][a]
+      else:
+        returns_sum[s][a] = G
+        Q[s][a] += (returns_sum[s][a] - Q[s][a]) / N[s][a]
+=>PYTHONTEX#PYGpython#default#defaultverb#11#verbatim###frame=single, indent=L#chap03.tex#635#
+import numpy as np
+import sys
+import random
+from collections import defaultdict
+
+class MCAgent():
+  def __init__(self, env, alpha=0.0001, gamma=0.99, ep_decay=0.9999):
+    self.env = env
+    self.n_action = self.env.action_space.n
+    self.alpha = alpha
+    self.gamma = gamma
+    print('Environment name: ', self.env.spec.name)
+
+  def best_policy(self, Q):
+    policy = dict((k, np.argmax(v)) for k, v in Q.items())
+    return policy
+
+  def epsilon_greedy_policy(self, state, Q, epsilon):
+    if random.uniform(0, 1) < epsilon: # explore
+      action = self.env.action_space.sample()
+    else: # exploit
+      action = np.argmax(Q[state,:])
+    return action
+
+  def generate_episode(self, Q, epsilon):
+    states, actions, rewards = [], [], []
+    state = self.env.reset()[0]
+    while True:
+      states.append(state)
+      action = self.epsilon_greedy_policy(state, Q, epsilon)
+      actions.append(action)
+      next_state, reward, done, info, _ = env.step(action)
+      rewards.append(reward)
+      state = next_state
+      if done:
+        break
+    return (states, actions, rewards)
+
+  def update_Q(self, episode, Q):
+    returns = 0
+    states, actions, rewards = episode
+    for t in range(len(states) - 1, -1, -1): # traverse in reverse order
+      s = states[t]
+      a = actions[t]
+      r = rewards[t]
+      returns += r * (self.gamma ** t) # discounted rewards
+      if s not in states[:t]:   # if S is a first visit (last index is ignore)
+        Q[s][a] += self.alpha * (returns - Q[s][a])
+    return Q
+
+  def mc_control(self, num_episodes=500000):
+    Q = defaultdict(lambda: np.zeros(self.n_action))
+    epsilon = 1.0
+    eps_min = 0.0001
+    decay = 0.9999
+    for i in range(num_episodes):
+      if i % 1000 == 0:
+        print('\rEpisode: {}/{}.'.format(i, num_episodes), end="")
+        sys.stdout.flush()
+
+      episode = self.generate_episode(Q, epsilon)
+      Q = self.update_Q(episode, Q)
+      self.epsilon = max(epsilon * decay, eps_min)
+      policy = self.best_policy(Q)
+    return policy, Q
+
+  def __delete__(self):
+    self.env.close()
+
+if __name__ == '__main__':
+  env = gym.make("Blackjack-v1")
+  agent = MCAgent(env)
+
+  # Learn optimal policy
+  policy, Q = agent.mc_control(num_episodes=500000)
+
+  # Compute value function
+  V = dict((k, np.max(v)) for k, v in Q.items())
+
+  # plot Value & Policy
+  plot_blackjack_values(V)
+  plot_blackjack_policy(policy)
+=>PYTHONTEX#PYGpython#default#defaultverb#12#verbatim###frame=single, indent=L#chap04.tex#95#
+import gymnasium as gym
+import numpy as np
+import sys
+import time
+
+class QLearningAgent():
+  def __init__(self, env, alpha=0.3, gamma=0.99, fixed_epsilon=None):
+    self.env = env
+    self.alpha = alpha
+    self.gamma = gamma
+    if fixed_epsilon is None:
+      self.epsilon = 1.0
+      self.eps_min = 0.01
+      self.decay_rate = 0.999
+      self.decay_flag = True
+    else:
+      self.epsilon = fixed_epsilon
+      self.decay_flag = False
+
+    print('Environment Name: ', self.env.spec.name)
+    print('RL Agent: ', 'Q-Learning')
+
+    # initialize Q table
+    self.Q = np.zeros((self.env.observation_space.n,
+                                 self.env.action_space.n))
+
+  def epsilon_greedy_policy(self, state, epsilon):
+    randvar = np.random.uniform(0, 1)
+    if randvar < epsilon:
+      action = self.env.action_space.sample() # explore
+    else:
+      if np.max(self.Q[state]) > 0:
+        action = np.argmax(self.Q[state]) # exploit
+      else:
+        action = self.env.action_space.sample() # explore
+    return action
+
+
+  def update_q_table(self, s, a, r, s_next):
+    self.Q[s][a] += self.alpha * (r + self.gamma * \
+                         np.max(self.Q[s_next]) - self.Q[s][a])
+
+  def train(self, num_episodes=1000, filename=None, freq=100):
+    if filename is not None:
+      file = open(filename, "w")
+
+    ep_rewards = []
+    start = time.time()
+    for i in range(num_episodes):
+      ep_reward = 0
+      # reset the environment for each episode
+      state = self.env.reset()[0]
+      while True:
+        # select an action
+        action = self.epsilon_greedy_policy(state, self.epsilon)
+        # obtain rewards
+        next_state, reward, done, _, _ = self.env.step(action)
+        # update q table
+        self.update_q_table(state, action, reward, next_state)
+        # accumulate rewards for the episode
+        ep_reward += reward
+        # prepare for next iteration
+        state = next_state
+        if done: # end of episode
+          ep_rewards.append(ep_reward)
+          break
+      #end of while loop
+      if self.decay_flag: # allow epsilon decay
+        self.epsilon = max(self.epsilon * self.decay_rate, self.eps_min)
+
+      if filename is not None:
+        file.write("{}\t{}\n".format(np.mean(ep_rewards), self.epsilon))
+      if i % freq == 0:
+        print('\rEpisode: {}/{}, Average episodic Reward:{:.3f}.'\
+              .format(i, num_episodes, np.mean(ep_rewards)), end="")
+        sys.stdout.flush()
+    #end of for loop
+    end = time.time()
+    print('\nTraining time (seconds): ', (end - start))
+    if filename is not None:
+      file.close()
+
+  def validate(self, num_episodes=10):
+    ep_rewards = []
+    for i in range(num_episodes):
+      state = self.env.reset()[0]
+      ep_reward = 0
+      while True:
+        action = self.epsilon_greedy_policy(state, epsilon=0)
+        next_state, reward, done, _, _ = self.env.step(action)
+        ep_reward += reward
+        state = next_state
+        if done:
+          ep_rewards.append(ep_reward)
+          break
+    print('\nTest: Average Episodic Reward: ', np.mean(ep_rewards))
+
+  def display_q_table(self):
+    print("\n ------------------ \n")
+    print(self.Q)
+    print("\n ------------------ \n")
+
+  def __delete__(self):
+    self.env.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#13#verbatim###frame=single, indent=L#chap04.tex#212#
+if __name__ == '__main__':
+    env = gym.make('FrozenLake-v1', is_slippery=False)
+    agent = QLearningAgent(env, alpha=0.1)
+    agent.train(num_episodes=1000, filename='flake_qlearn.tsv', freq=1000)
+    agent.validate()
+=>PYTHONTEX#PYGpython#default#defaultverb#14#verbatim###frame=single, indent=L#chap04.tex#234#
+if __name__ == '__main__':
+    env = gym.make('Taxi-v3', is_slippery=False)
+    agent = QLearningAgent(env, alpha=0.1)
+    agent.train(num_episodes=20000, filename='taxi_qlearn.tsv', freq=1000)
+    agent.validate()
+=>PYTHONTEX#PYGpython#default#defaultverb#15#verbatim###frame=single, indent=L#chap04.tex#284#
+import gymnasium as gym
+import numpy as np
+import sys
+import time
+
+class AgentSARSA():
+  def __init__(self, env, alpha=0.3, gamma=0.99, fixed_epsilon=None):
+    self.env = env
+    self.alpha = alpha # learning rate
+    self.gamma = gamma # discount factor
+    if fixed_epsilon is None:
+      self.epsilon = 1.0      # exploration probability
+      self.eps_min = 0.01
+      self.decay_rate = 0.999
+      self.decay_flag = True
+    else:
+      self.epsilon = fixed_epsilon
+      self.decay_flag = False
+
+    print('Environment Name: ', self.env.spec.name)
+    print('RL Agent: ', 'SARSA')
+
+    # initialize Q table
+    self.Q = np.zeros((self.env.observation_space.n,
+                              self.env.action_space.n))
+
+
+  def epsilon_greedy_policy(self, state, epsilon):
+    randvar = np.random.uniform(0, 1)
+    if randvar < epsilon:
+      action = self.env.action_space.sample() # explore
+    else:
+      if np.max(self.Q[state]) > 0:
+        action = np.argmax(self.Q[state]) # exploit
+      else:
+        action = self.env.action_space.sample() # explore
+    return action
+
+
+  def update_q_table(self, s, a, r, s_next, a_next):
+    self.Q[s][a] += self.alpha * (r + self.gamma * \
+                      self.Q[s_next][a_next] - self.Q[s][a])
+
+  def train(self, num_episodes=1000, freq=1000, filename=None):
+    if filename is not None:
+      file = open(filename, "w")
+    ep_rewards = []
+    start = time.time()
+    for i in range(num_episodes):
+      ep_reward = 0
+      state = self.env.reset()[0] #reset the environment
+      action = self.epsilon_greedy_policy(state, self.epsilon)
+      while True:
+        # get next_state and reward
+        next_state, reward, done, _, _ = self.env.step(action)
+
+        # get action for next_state
+        next_action = self.epsilon_greedy_policy(next_state, self.epsilon)
+
+        # update q table
+        self.update_q_table(state, action, reward, \
+                                 next_state, next_action)
+
+        # epsodic reward
+        ep_reward += reward
+
+        # prepare for next iteration
+        state = next_state
+        action = next_action
+        if done:
+          ep_rewards.append(ep_reward)
+          break
+      #end of while loop
+      if self.decay_flag: # allow epsilon decay
+        self.epsilon = max(self.epsilon * self.decay_rate, self.eps_min)
+
+      if filename is not None:
+        file.write("{}\t{}\n".format(np.mean(ep_rewards), self.epsilon))
+      if i % freq == 0:
+        print('\rEpisode: {}/{}, Average episodic Reward:{:.3f}.'\
+              .format(i, num_episodes, np.mean(ep_rewards)), end="")
+        sys.stdout.flush()
+    #end of for loop
+    end = time.time()
+    print('\n Training Time: ', (end-start))
+    if filename is not None:
+      file.close()
+
+  def validate(self, num_episodes=10):
+    ep_rewards = []
+    for i in range(num_episodes):
+      state = self.env.reset()[0]
+      ep_reward = 0
+      while True:
+        action = self.epsilon_greedy_policy(state, epsilon=0)
+        next_state, reward, done, _, _ = self.env.step(action)
+        ep_reward += reward
+        state = next_state
+        if done:
+          ep_rewards.append(ep_reward)
+          break
+    print('\nAverage Episodic Reward: ', np.mean(ep_rewards))
+
+  def display_q_table(self):
+    print("\n ------------------ \n")
+    print(self.Q)
+    print("\n ------------------ \n")
+
+  def __delete__(self):
+    self.env.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#16#verbatim###frame=single, indent=L#chap04.tex#413#
+if __name__ == '__main__':
+    env = gym.make('Taxi-v3')
+    agent = AgentSARSA(env, alpha=0.1)
+    agent.train(num_episodes=20000, filename='taxi_sarsa.tsv')
+    agent.validate()
+=>PYTHONTEX#PYGpython#default#defaultverb#17#verbatim###frame=single, indent=L#chap04.tex#435#
+if __name__ == '__main__':
+    env = gym.make('FrozenLake-v1', is_slippery=False)
+    agent = AgentSARSA(env, alpha=0.1)
+    agent.train(num_episodes=1000, filename='flake_sarsa.tsv')
+    agent.validate()
+=>PYTHONTEX#PYGpython#default#defaultverb#18#verbatim###frame=single, indent=L#chap05.tex#179#
+import numpy as np
+class ReplayBuffer():
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.buffer = np.zeros(self.capacity, dtype=object)
+        self.idx = 0
+        self.full = False
+
+    def add(self, experience:tuple):
+        self.buffer[self.idx] = experience
+        self.idx = (self.idx + 1) % self.capacity
+        # set this flag if buffer is full
+        self.full = self.full or self.idx == 0
+
+    def sample(self, batch_size=24):
+        indices = np.random.randint(0, self.capacity \
+                                    if self.full else self.idx,
+                                    size=batch_size)
+        batch = self.buffer[indices]
+        return batch
+
+    def __getitem__(self, index):
+        if index >= 0 and index < self.capacity \
+                        if self.full else self.idx: # sanity check
+            return self.buffer[index]
+        else:
+            raise ValueError('Index is out of range')
+
+    def __len__(self):
+        # return the current length of buffer
+        return self.capacity if self.full else self.idx
+=>PYTHONTEX#PYGpython#default#defaultverb#19#verbatim###frame=single, indent=L#chap05.tex#227#
+import sys
+import os
+import random
+import tensorflow as tf
+import keras
+from keras.layers import Dense
+from keras.optimizers import Adam
+from keras.models import Sequential
+
+class DQNAgent:
+    def __init__(self, obs_shape: tuple, n_actions: int,
+                buffer_size=2000, batch_size=24,
+                ddqn_flag=True, model=None):
+
+        self.obs_shape = obs_shape
+        self.action_size = n_actions   # number discrete actions
+        self.ddqn = ddqn_flag   # choose between DQN & DDQN
+
+        # hyper-parameters for DQN
+        self.gamma = 0.99    # discount factor
+        self.epsilon = 1.0    # exploration rate - epsilon-greedy policy
+        self.epsilon_decay = 0.999
+        self.epsilon_min = 0.01
+        self.batch_size = batch_size
+        self.buffer_size = buffer_size
+        self.train_start = 1000  # minimum buffer size to start training
+        self.learning_rate = 0.001 # learning rate for the Deep Network
+
+        # create a replay buffer to store experiences
+        self.memory = ReplayBuffer(self.buffer_size)
+
+        # create main model & target model   - DDQN Architecture
+        if model is None:
+            self.model = self._build_model()
+            self.target_model = self._build_model()
+        else:
+            self.model = model
+            self.target_model = tf.keras.models.clone_model(model)
+
+        # initialize target model
+        self.target_model.set_weights(self.model.get_weights())
+
+
+    def _build_model(self):
+        model = keras.Sequential([
+            keras.layers.Dense(24, input_shape=self.obs_shape,
+                              activation='relu',
+                              kernel_initializer='he_uniform'),
+            keras.layers.Dense(24, activation='relu',
+                              kernel_initializer='he_uniform'),
+            keras.layers.Dense(self.action_size, activation='linear',
+                              kernel_initializer='he_uniform')
+        ])
+        model.summary()
+        model.compile(loss='mse', optimizer=Adam(
+                                 learning_rate=self.learning_rate))
+        return model
+
+    def update_target_model(self, tau):
+        pass
+
+    def get_action(self, state):
+        pass
+
+    def store_experience(self, state, action, reward, next_state, done):
+        self.memory.add((state, action, reward, next_state, done))
+
+    def get_target_q_value(self, s_next):
+        pass
+
+    def experience_replay(self):
+        pass
+
+    def update_epsilon(self):
+        pass
+
+    def save_model(self, filename):
+        self.model.save_weights(filename)
+
+    def load_model(self, filename):
+        self.model.load_weights(filename)
+=>PYTHONTEX#PYGpython#default#defaultverb#20#verbatim###frame=single, indent=L#chap05.tex#331#
+class DQNAgent()
+    def get_action(self, state, epsilon=None):
+        # epsilon-greedy policy
+        if epsilon is None:
+            epsilon = self.epsilon   # decaying epsilon
+        if np.random.rand() <= epsilon: # explore
+            return random.randrange(self.action_size)
+        else:
+            q_value = self.model.predict(state, verbose=0)
+            return np.argmax(q_value[0])
+
+=>PYTHONTEX#PYGpython#default#defaultverb#21#verbatim###frame=single, indent=L#chap05.tex#363#
+class DQNAgent():
+    def get_target_q_value(self, next_states): # batch input
+        q_value_ns = self.model.predict(next_states, verbose=0)  # Q(s', :)
+        if self.ddqn: ## DDQN algorithm
+            # primary model is used for action selection: a = arg max Q(s,a)
+            max_actions = np.argmax(q_value_ns, axis=1)
+            # use target model for action evaluation: Q'(s',:)
+            target_q_values_ns = self.target_model.predict(
+                                             next_states, verbose=0)
+            # Q'(s', argmax(Q(s,a)))
+            max_q_values = target_q_values_ns[
+                        range(len(target_q_values_ns)), max_actions]
+        else: # DQN
+            max_q_values = np.amax(q_values_ns, axis=1)
+        return max_q_values
+
+    def experience_replay(self):
+        if len(self.memory) < self.train_start:
+            return
+        # sample experiences from replay buffer
+        batch_size = min(self.batch_size, len(self.memory))
+        mini_batch = self.memory.sample(self.batch_size)
+
+        # unwrapping mini_batch tuple
+        states = np.zeros((self.batch_size, *self.obs_shape))
+        next_states = np.zeros((self.batch_size, *self.obs_shape))
+        actions = np.zeros((self.batch_size, 1))
+        rewards = np.zeros((self.batch_size, 1))
+        dones = np.zeros((self.batch_size, 1))
+        for i in range(len(mini_batch)):
+            states[i] = mini_batch[i][0]
+            actions[i] = mini_batch[i][1]
+            rewards[i] = mini_batch[i][2]
+            next_states[i] = mini_batch[i][3]
+            dones[i] = mini_batch[i][4]
+
+        q_values_cs = self.model.predict(states, verbose=0)
+        max_q_values_ns = self.get_target_q_value(next_states)
+
+        # compute target q value
+        for i in range(len(q_values_cs)):
+            action = actions[i].astype(int)[0]
+            done = dones[i].astype(bool)[0]
+            reward = rewards[i][0]
+            if done: # terminal state
+                q_values_cs[i][action] = reward
+            else:
+                q_values_cs[i][action] = reward + \
+                              self.gamma * max_q_values_ns[i]
+
+        # train the Q network
+        self.model.fit(np.array(states), np.array(q_values_cs),
+                      batch_size=batch_size,
+                      epochs=1,
+                      verbose=0)
+
+        # decay epsilon over time
+        self.update_epsilon()
+
+    def update_epsilon(self):
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+=>PYTHONTEX#PYGpython#default#defaultverb#22#verbatim###frame=single, indent=L#chap05.tex#455#
+def train(env, agent, max_episodes=300, train_freq=1,
+                        copy_freq=1, filename=None):
+    if filename is not None:
+        file = open(filename, 'w')
+    #averaging factor - choose between soft & hard update
+    tau = 0.1 if copy_freq < 10 else 1.0
+    best_score = 0
+    scores = []
+    avg_score, avg100_score = [], []
+  global_step_cnt = 0
+    for e in range(max_episodes):
+        state = env.reset()[0]
+        state = np.expand_dims(state, axis=0)
+        done = False
+        ep_reward = 0
+        t = 0
+        while not done:
+            global_step_cnt += 1
+            # take action
+            action = agent.get_action(state)
+            # collect reward & transition to next state
+            next_state, reward, done, _, _ = env.step(action)
+            next_state = np.expand_dims(next_state, axis=0)
+
+            # reward engineering
+            # discourages premature termination
+            reward = reward if not done else -100
+
+            #store experience
+            agent.store_experience(state, action, \
+                                 reward, next_state, done)
+
+            state = next_state
+            ep_reward += reward
+            t += 1
+
+            # train
+            if global_step_cnt % train_freq == 0:
+                agent.experience_replay()
+
+            # update the target model
+            if global_step_cnt % copy_freq == 0:
+                agent.update_target_model(tau=tau)
+        # while loop ends here
+        if e > 100 and t > best_score:
+            agent.save_model('best_model.weights.h5')
+            best_score=t
+        scores.append(t)
+        avg_score.append(np.mean(scores))
+        avg100_score.append(np.mean(scores[-100:]))
+        if filename is not None:
+            file.write(f'{e}\t{t}\t{np.mean(scores)}\
+                              \t{np.mean(scores[-100:])}\n')
+            file.flush()
+            os.fsync(file.fileno())
+        if e % 20 == 0:
+            print(f'e:{e}, ep_reward:{t}, avg_ep_reward: \
+                                      {np.mean(scores):.2f}')
+    # end of for loop
+    print('end of training')
+    file.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#23#verbatim###frame=single, indent=L#chap05.tex#558#
+    import gymnasium as gym
+
+    if __name__ == '__main__':
+    # create gym environment
+    env = gym.make('CartPole-v0')
+    obs_shape = env.observation_space.shape
+    n_actions = env.action_space.n
+
+    # create DQN Agent
+    agent = DQNAgent(obs_shape, n_actions,
+    buffer_size=2000,
+    batch_size=24)
+    # train the agent
+    train(env, agent, max_episodes=200, copy_freq=100,
+    filename='cp_dqn.txt')
+=>PYTHONTEX#PYGpython#default#defaultverb#24#verbatim###frame=single, indent=L#chap05.tex#745#
+    class SumTree(object):
+    # Here we initialize the tree with all nodes = 0,
+    # and initialize the data with all values = 0
+    def __init__(self, capacity):
+    # Number of leaf nodes (final nodes) that contains experiences
+    self.capacity = capacity
+    self.data_pointer = 0
+    self.full = False   # indicates if the buffer is full
+    self.tree = np.zeros(2 * capacity - 1)  # contains priorities
+    # Contains the experiences (so the size of data is capacity)
+    self.data = np.zeros(capacity, dtype=object)
+
+    def add(self, priority, data):
+    # data is stored at the leaf of the tree from index: n-1 to 2*n-1
+    tree_index = self.data_pointer + self.capacity - 1
+    # Update data frame
+    self.data[self.data_pointer] = data
+    # Update the leaf
+    self.update(tree_index, priority)
+    # Add 1 to data_pointer
+    self.data_pointer += 1
+    # If above capacity, go back to first index to overwrite
+    if self.data_pointer >= self.capacity:
+    self.data_pointer = 0
+    self.full = True
+
+    def __len__(self):  # returns the size of data buffer only
+    return self.capacity if self.full else self.data_pointer
+
+    def __getitem__(self, index):
+    # return data and priority at index i
+    if index >= 0 and index < self.capacity \
+    if self.full else self.data_pointer:
+    tree_idx = index + self.capacity - 1
+    return self.data[index], self.tree[tree_idx]
+    else:
+    raise ValueError('index out of range')
+
+
+    def update(self, tree_index, priority):
+    # Change = new priority score - former priority score
+    change = priority - self.tree[tree_index]
+    self.tree[tree_index] = priority
+
+    # then propagate the change through tree
+    # this method is faster than the recursive loop
+    while tree_index != 0:
+    tree_index = (tree_index - 1) // 2
+    self.tree[tree_index] += change
+
+    def get_leaf(self, v):
+    parent_index = 0
+    while True:
+    left_child_index = 2 * parent_index + 1
+    right_child_index = left_child_index + 1
+
+    # If we reach bottom, end the search
+    if left_child_index >= len(self.tree):
+    leaf_index = parent_index
+    break
+    else: # downward search, always search for a higher priority node
+    if v <= self.tree[left_child_index]:
+    parent_index = left_child_index
+    else:
+    v -= self.tree[left_child_index]
+    parent_index = right_child_index
+
+    data_index = leaf_index - self.capacity + 1
+    return leaf_index, self.tree[leaf_index], self.data[data_index]
+
+    @property
+    def total_priority(self):
+    return self.tree[0] # Returns the root node
+=>PYTHONTEX#PYGpython#default#defaultverb#25#verbatim###frame=single, indent=L#chap05.tex#845#
+    class STBuffer(object):
+    # stored as ( state, action, reward, next_state ) in SumTree
+    PER_e = 0.01  # avoid some experiences to have 0 probability
+    PER_a = 0.6  #  control randomness in stochastic prioritization
+    PER_b = 0.4  # importance-sampling, from initial value increasing to 1
+    PER_b_increment_per_sampling = 0.001
+    absolute_error_upper = 1.  # clipped abs error
+
+    def __init__(self, capacity):
+    # Making the tree
+    self.tree = SumTree(capacity)
+
+    def add(self, experience):
+    # Find the max priority of leaf nodes
+    max_priority = np.max(self.tree.tree[-self.tree.capacity:])
+    # If the max priority = 0 we can't put priority = 0
+    # since this experience will never have a chance to be selected
+    # So we use a minimum priority
+    if max_priority == 0:
+    max_priority = self.absolute_error_upper
+    # set the priority for new experience
+    self.tree.add(max_priority, experience)
+
+    def sample(self, n):
+    # Create a minibatch array that will contains the minibatch
+    minibatch = []
+    b_idx = np.empty((n,), dtype=np.int32)
+    # array to store sample priorities
+    priorities = np.empty((n,), dtype=np.float32)
+    # Calculate the priority segment
+    # we divide the Range[0, ptotal] into n ranges
+    priority_segment = self.tree.total_priority / n  # priority segment
+    for i in range(n):
+    # A value is uniformly sample from each range
+    a, b = priority_segment * i, priority_segment * (i + 1)
+    value = np.random.uniform(a, b)
+    # Experience that correspond to each value is retrieved
+    index, priority, data = self.tree.get_leaf(value)
+    b_idx[i]= index
+    priorities[i] = priority   # experimental
+    minibatch.append([data[0],data[1],data[2],data[3],data[4]])
+    return b_idx, minibatch,
+
+    def batch_update(self, tree_idx, abs_errors):
+    abs_errors += self.PER_e  # convert to abs and avoid 0
+    clipped_errors = np.minimum(abs_errors, self.absolute_error_upper)
+    # stochastic prioritization
+    ps = np.power(clipped_errors, self.PER_a)  # values between 0 and 1
+    # convert priorities into probabilities
+    prob = ps / np.sum(ps) # experimental
+    # importance sampling weights: iw = [1 / ( N * P)]^b
+    is_wts = np.power(len(prob) * prob, -self.PER_b)
+    for ti, p, iw in zip(tree_idx, ps, is_wts):
+    new_p = p * iw
+    self.tree.update(ti, new_p)
+    # gradually increase PER_b for more focus on high-error experience
+    self.PER_b = min(1.0, self.PER_b + \
+    self.PER_b_increment_per_sampling)
+
+    def __len__(self):
+    return len(self.tree)
+
+    def __getitem__(self, index):
+    return self.tree[index]
+=>PYTHONTEX#PYGpython#default#defaultverb#26#verbatim###frame=single, indent=L#chap05.tex#926#
+    class DQNPERAgent(DQNAgent):
+    def __init__(self, obs_shape: tuple, n_actions: int,
+    buffer_size=2000, batch_size=24,
+    ddqn_flag=True, model=None):
+    super().__init__(obs_shape, n_actions, buffer_size,
+    # uses a sumtree Buffer
+    self.memory = STBuffer(capacity=buffer_size)
+
+
+    def experience_replay(self):
+    if len(self.memory) < self.train_start:
+    return
+    batch_size = min(self.batch_size, len(self.memory))
+    tree_idx, mini_batch = self.memory.sample(self.batch_size)
+    states = np.zeros((self.batch_size, *self.obs_shape))
+    next_states = np.zeros((self.batch_size, *self.obs_shape))
+    actions = np.zeros((self.batch_size, 1))
+    rewards = np.zeros((self.batch_size, 1))
+    dones = np.zeros((self.batch_size, 1))
+    for i in range(len(mini_batch)):
+    states[i] = mini_batch[i][0]
+    actions[i] = mini_batch[i][1]
+    rewards[i] = mini_batch[i][2]
+    next_states[i] = mini_batch[i][3]
+    dones[i]  = mini_batch[i][4]
+    q_values_cs = self.model.predict(states, verbose=0)
+    q_values_cs_old = np.array(q_values_cs).copy() # deep copy
+    max_q_values_ns = self.get_target_q_value(next_states)
+    # Q-learning updates
+    for i in range(len(q_values_cs)):
+    action = actions[i].astype(int)[0] # check
+    done = dones[i].astype(bool)[0] # check
+    reward = rewards[i][0] # check
+    if done:
+    q_values_cs[i][action] = reward
+    else:
+    q_values_cs[i][action] = reward + \
+    self.gamma * max_q_values_ns[i]
+    # update experience priorities
+    indices = np.arange(self.batch_size, dtype=np.int32)
+    actions = actions[:,0].astype(int)
+    absolute_errors = np.abs(q_values_cs_old[indices, actions] - \
+    q_values_cs[indices, actions])
+    # update sample priorities
+    self.memory.batch_update(tree_idx, absolute_errors)
+    # train the Q network
+    self.model.fit(np.array(states),
+    np.array(q_values_cs),
+    batch_size = batch_size,
+    epochs = 1,
+    verbose = 0)
+    # decay epsilon over time
+    self.update_epsilon()
+=>PYTHONTEX#PYGpython#default#defaultverb#27#verbatim###frame=single, indent=L#chap05.tex#1023#
+    def train(env, agent, max_episodes=300,
+    train_freq=1, copy_freq=10, filename=None, wtfile_prefix=None):
+    if filename is not None:
+    file = open(filename, 'w')
+    if wtfile_prefix is not None:
+    wt_filename = wtfile_prefix + '_best_model.weights.h5'
+    else:
+    wt_filename = 'best_model.weights.h5'
+
+    # choose between soft & hard target update
+    tau = 0.1 if copy_freq < 10 else 1.0
+    max_steps = 200
+    car_positions = []
+    scores, avg_scores = [], []
+    global_step_cnt = 0
+    for e in range(max_episodes):
+    # make observation
+    state = env.reset()[0]
+    state = np.expand_dims(state, axis=0)
+    done = False
+    ep_reward = 0
+    t = 0
+    max_pos = -99.0
+    while not done:
+    global_step_cnt += 1
+    # take action using epsilon-greedy policy
+    action = agent.get_action(state)
+    # transition to next state
+    # and collect reward from the environment
+    next_state, reward, done, _, _ = env.step(action)
+    next_state = np.expand_dims(next_state, axis=0) # (-1, 4)
+    # reward engineering - important step
+    if next_state[0][0] >= 0.5:
+    reward += 200
+    else:
+    reward = 5*abs(next_state[0][0] - state[0][0])\
+    + 3*abs(state[0][1])
+
+    # track maximum car position
+    if next_state[0][0] > max_pos:
+    max_pos = next_state[0][0]
+
+    # store experience in replay buffer
+    agent.store_experience(state, action, reward, next_state, done)
+    state = next_state
+    ep_reward += reward
+    t += 1
+
+    # train
+    if global_step_cnt % train_freq == 0:
+    agent.experience_replay()
+
+    # update target model
+    if global_step_cnt % copy_freq == 0:
+    agent.update_target_model(tau=tau)
+    if done and t < max_steps:
+    print('\nSuccessfully solved the problem in {} episodes. \
+    max_pos:{:.2f}, steps: {}\n'.format(e, max_pos, t))
+    agent.save_model(wt_filename)
+
+    if t >= max_steps:
+    break
+    # episode ends here
+    car_positions.append(state[0][0])
+    scores.append(ep_reward)
+    avg_scores.append(np.mean(scores))
+    if filename is not None:
+    file.write(f'{e}\t{ep_reward}\t{np.mean(scores)}\
+    \t{max_pos}\t{t}\n' )
+    file.flush()
+    os.fsync(file.fileno()) # write to the file immediately
+    #print on console
+    print(f'\re:{e}, ep_reward: {ep_reward:.2f}, avg_ep_reward: \
+    {np.mean(scores):.2f}, ep_steps: {t}, max_pos: {max_pos:.2f}', end="")
+    sys.stdout.flush()
+    print('End of training')
+    file.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#28#verbatim###frame=single, indent=L#chap05.tex#1120#
+    import matplotlib.pyplot as plt
+    import gymnasium as gym
+    import keras
+
+    # create a gym environment
+    env = gym.make('MountainCar-v0', render_mode='rgb_array')
+    obs_shape = env.observation_space.shape
+    action_shape = env.action_space.shape
+    n_actions = env.action_space.n
+    print('Observation shape: ', obs_shape)
+    print('Action shape: ', action_shape)
+    print('Action size: ', n_actions)
+    print('Max episodic steps: ', env.spec.max_episode_steps)
+
+    # Create a model
+    model = keras.Sequential([
+      keras.layers.Dense(30, input_shape=obs_shape, activation='relu'),
+      keras.layers.Dense(60, activation='relu'),
+      keras.layers.Dense(n_actions, activation='linear')
+    ])
+    model.compile(loss='mse',  \
+    optimizer=keras.optimizers.Adam(learning_rate=0.001))
+
+
+    # create a DQN PER Agent
+    agent = DQNPERAgent(obs_shape, n_actions,
+    buffer_size=20000,
+    batch_size=64,
+    model=model)
+
+    # train the agent
+    train(env, agent, max_episodes=200, copy_freq=200, \
+    filename='mc_dqn_per.txt')
+=>PYTHONTEX#PYGpython#default#defaultverb#29#verbatim###frame=single, indent=L#chap05.tex#1222#
+import gymnasium as gym
+import matplotlib.pyplot as plt
+import numpy as np
+# create an atari environment
+env = gym.make('ALE/MsPacman-v5', obs_type="grayscale",
+               render_mode='rgb_array')
+obs_shape = env.observation_space.shape + (1,)
+print('shape of action space: ', env.action_space.n)
+print('shape of observation space: ', env.observation_space.shape)
+x = env.reset()[0]  # initialize environment and make observation
+print('shape of x: ', np.shape(x))
+plt.imshow(x)   # visualize observation
+plt.axis('off')
+print('obs_shape: ', obs_shape)
+print('Max Environment Steps:', env.spec.max_episode_steps)
+print('Observation space low: ', env.observation_space.low[0][0])
+print('Observation space high:', env.observation_space.high[0][0])
+=>PYTHONTEX#PYGpython#default#defaultverb#30#verbatim###frame=single, indent=L#chap05.tex#1275#
+from collections import deque
+import gymnasium as gym
+from gym.spaces import Box
+
+class FrameStack(gym.Wrapper):
+    """
+    Wrapper that stacks observations from the environment
+    into a single observation. This wrapper keeps a rolling buffer
+    of the most recent frames and stacks them
+    together as a new observation.
+    """
+    def __init__(self, env, num_stacked_frames):
+        """
+        Args:
+          env: The environment to wrap.
+          num_stacked_frames: The number of frames to stack.
+        """
+        super(FrameStack, self).__init__(env)
+        self.num_stacked_frames = num_stacked_frames
+        self.frames = deque([], maxlen=num_stacked_frames)
+        obs_shape = env.observation_space.shape
+        if len(obs_shape) == 2: # convert (H, W) to (H, W, D)
+            obs_shape = obs_shape + (1,)
+        # Modify the observation space to accommodate stacked frames
+        self.observation_space = Box(
+            low=0, high=255,
+            shape=(obs_shape[0], obs_shape[1],
+                     obs_shape[2] * self.num_stacked_frames),
+            dtype=self.env.observation_space.dtype
+        )
+
+    def reset(self):
+        """
+        Resets the environment and fills the frame buffer
+        with initial observations.
+        """
+        observation = self.env.reset()[0]
+        if len(np.shape(observation)) == 2: # convert (H, W) to (H, W, D)
+            observation = np.expand_dims(observation, axis=2)
+        for _ in range(self.num_stacked_frames):
+            self.frames.append(observation)
+        return self._stack_frames()
+
+    def step(self, action):
+        """ Steps through the environment and stacks
+            the new observation with previous ones.
+        """
+        observation, reward, done, info, _ = self.env.step(action)
+        if len(np.shape(observation)) == 2: # convert (H, W) to (H, W, D)
+            observation = np.expand_dims(observation, axis=2)
+        self.frames.append(observation)
+        return self._stack_frames(), reward, done, info
+
+    def _stack_frames(self):
+        """ Stacks frames from the buffer into a single observation.
+        """
+        return np.concatenate(self.frames, axis=2)
+
+=>PYTHONTEX#PYGpython#default#defaultverb#31#verbatim###frame=single, indent=L#chap05.tex#1351#
+import cv2
+import sys
+
+class DQNAtariAgent(DQNPERAgent):
+    def __init__(self, obs_shape: tuple, n_actions: int,
+                        buffer_size=2000, batch_size=24,
+                        ddqn_flag=True, model=None, per_flag=True):
+        self.per_flag = per_flag
+
+        if self.per_flag:
+            super().__init__(obs_shape, n_actions, buffer_size,
+                        batch_size, ddqn_flag, model)
+        else:
+            DQNAgent.__init__(self, obs_shape, n_actions, buffer_size,
+                              batch_size, ddqn_flag, model)
+
+    def experience_replay(self):
+        if self.per_flag:
+            super().experience_replay()
+        else:
+            DQNAgent.experience_replay(self)
+
+
+    def preprocess(self, observation, x_crop=(1, 172), y_crop=None):
+        assert len(self.obs_shape) == 3, \
+                      "Observation must have 3 dimension (H, W, C)"
+        output_shape = self.obs_shape[:-1] # all but last (H, W)
+        # crop image
+        if x_crop is not None and y_crop is not None:
+            xlow, xhigh = x_crop
+            ylow, yhigh = y_crop
+            observation = observation[xlow:xhigh, ylow:yhigh]
+        elif x_crop is not None and y_crop is None:
+            xlow, xhigh = x_crop
+            observation = observation[xlow:xhigh, :]
+        elif x_crop is None and y_crop is not None:
+                ylow, yhigh = y_crop
+                observation = observation[:, ylow:yhigh]
+        else:
+            observation = observation
+
+        # resize image
+        observation = cv2.resize(observation, output_shape)
+
+        # normalize image
+        observation = observation / 255.  # normalize between 0 & 1
+        return observation
+
+    def train(self, env, max_episodes=300,
+          train_freq=1, copy_freq=1, filename=None, wtfile_prefix=None):
+
+        if filename is not None:
+            file = open(filename, 'w')
+
+        if wtfile_prefix is not None:
+            wt_filename = wtfile_prefix + '_best_model.weights.h5'
+        else:
+            wt_filename = 'best_model.weights.h5'
+
+        tau = 0.01 if copy_freq < 10 else 1.0
+
+        best_score, global_step_cnt = 0, 0
+        scores, avg_scores, avg100_scores = [], [], []
+        global_step_cnt = 0
+        for e in range(max_episodes):
+            state = env.reset() # with framestack wrapper
+            #state = env.reset()[0] # without framestack wrapper
+            state = self.preprocess(state)
+            state = np.expand_dims(state, axis=0)
+            done = False
+            ep_reward = 0
+            while not done:
+                global_step_cnt += 1
+                # take action
+                action = self.get_action(state)
+                # collect reward
+                next_state, reward, done, _ = env.step(action)
+                next_state = self.preprocess(next_state) # (H, W, C)
+                next_state = np.expand_dims(next_state, axis=0) # (B, H, W, C)
+                # store experiences in eplay buffer
+                self.store_experience(state, action, reward,
+                                          next_state, done)
+                state = next_state
+                ep_reward += reward
+                # train
+                if global_step_cnt % train_freq == 0:
+                    self.experience_replay()
+
+                # update target model
+                if global_step_cnt % copy_freq == 0:
+                    self.update_target_model(tau=tau)
+                # end of while-loop
+            if ep_reward > best_score:
+                self.save_model(wt_filename)
+                best_score = ep_reward
+            scores.append(ep_reward)
+            avg_scores.append(np.mean(scores))
+            avg100_scores.append(np.mean(scores[-100:]))
+            if filename is not None:
+                file.write(f'{e}\t{ep_reward}\t{np.mean(scores)}\
+                                 \t{np.mean(scores[-100:])}\n')
+                file.flush()
+                os.fsync(file.fileno())
+            print(f'\re:{e}, ep_reward: {ep_reward}, \
+                        avg_ep_reward: {np.mean(scores):.2f}', end="")
+            sys.stdout.flush()
+        # end of for loop
+        print('\nEnd of training')
+        if filename is not None:
+            file.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#32#verbatim###frame=single, indent=L#chap05.tex#1482#
+# create an instance of gym environment
+import gymnasium as gym
+env = gym.make('ALE/MsPacman-v5', obs_type="grayscale",
+                              render_mode='rgb_array')
+
+# Stack the frames using Wrapper
+env = FrameStack(env, num_stacked_frames=4)
+print('observation shape: ', env.observation_space.shape)
+
+n_actions = env.action_space.n
+print('Action space dimension: ', n_actions)
+
+# All images will be resized to this size
+obs_shape = (84, 84, 4)
+
+# create a sequential model for Q Network
+model = keras.Sequential([
+      keras.layers.Conv2D(32, kernel_size=8, strides=4, padding='same',
+               activation='relu', kernel_initializer='he_uniform',
+                          input_shape=obs_shape),
+      keras.layers.MaxPooling2D(pool_size=(2,2)),
+      keras.layers.Conv2D(64, kernel_size=2, strides=1, padding='same',
+               activation='relu', kernel_initializer='he_uniform'),
+      keras.layers.MaxPooling2D(pool_size=(2,2)),
+      keras.layers.Flatten(),
+      keras.layers.Dense(128, activation='relu',
+                        kernel_initializer='he_uniform'),
+      keras.layers.Dense(n_actions, activation='linear')
+  ])
+model.compile(loss='mse', optimizer="adam")
+
+# Create DQN PER Agent
+agent = DQNAtariAgent(obs_shape, n_actions,
+                      buffer_size=60000,
+                      batch_size=64,
+                      model=model, per_flag=True)
+# Train the agent
+agent.train(env, max_episodes=400, train_freq=5,
+               copy_freq=50, filename='pacman_dqn_per.txt')
+=>PYTHONTEX#PYGpython#default#defaultverb#33#verbatim###frame=single, indent=L#chap06.tex#283#
+import tensorflow as tf
+class PolicyNetwork():
+    def __init__(self, obs_shape, n_actions, lr=0.0001,
+                        fc1_dim=256, fc2_dim=256):
+        self.fc1_dim = fc1_dim
+        self.fc2_dim = fc2_dim
+        self.n_actions = n_actions
+        self.obs_shape = obs_shape
+        self.lr = lr
+        self.model = self._build_model()
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
+
+    def _build_model(self):
+        inputs = tf.keras.layers.Input(shape=self.obs_shape)
+        fc1 = tf.keras.layers.Dense(self.fc1_dim,
+                              activation='relu')(inputs)
+        fc2 = tf.keras.layers.Dense(self.fc2_dim,
+                              activation='relu')(fc1)
+        outputs = tf.keras.layers.Dense(self.n_actions,
+                              activation='softmax')(fc2)
+        model = tf.keras.models.Model(inputs, outputs,
+                              name='policy_network')
+        model.summary()
+        return model
+
+    def __call__(self, state):
+        pi = self.model(state)
+        return pi
+=>PYTHONTEX#PYGpython#default#defaultverb#34#verbatim###frame=single, indent=L#chap06.tex#318#
+import tensorflow as tf
+import tensorflow_probability as tfp
+import numpy as np
+class REINFORCEAgent:
+    def __init__(self, obs_shape, n_actions, alpha=0.0005, gamma=0.99):
+        self.gamma = gamma
+        self.lr = alpha
+        self.n_actions = n_actions
+        self.states = []
+        self.actions = []
+        self.rewards = []
+        self.obs_shape = obs_shape
+        # create policy network
+        self.policy = PolicyNetwork(obs_shape, n_actions, lr=self.alpha)
+
+    def choose_action(self, obs):
+        state = tf.convert_to_tensor(obs, dtype=tf.float32)
+        probs = self.policy(state)
+        action_probs = tfp.distributions.Categorical(probs=probs)
+        action = action_probs.sample()
+        return action.numpy()[0]
+
+    def store_transitions(self, state, action, reward):
+        self.states.append(state)
+        self.actions.append(action)
+        self.rewards.append(reward)
+
+    def calculate_return(self, rewards):
+        G = np.zeros_like(rewards)
+        for t in range(len(rewards)):
+            G_sum = 0
+            for k in range(t, len(rewards)):
+                G_sum += rewards[k] * self.gamma
+            G[t] = G_sum
+        return G
+
+    def train(self):
+        actions = tf.convert_to_tensor(self.actions, dtype=tf.float32)
+        rewards = np.array(self.rewards)
+        # compute returns
+        G = self.calculate_return(rewards)
+        # optimize with gradient ascent
+        with tf.GradientTape() as tape:
+            loss = 0
+            for idx, (g, state) in enumerate(zip(G, self.states)):
+                state = tf.convert_to_tensor(state, dtype=tf.float32)
+                probs = self.policy(state)
+                action_probs = tfp.distributions.Categorical(probs=probs)
+                log_prob = action_probs.log_prob(actions[idx])
+                loss += -g * tf.squeeze(log_prob)
+        trainable_params = self.policy.model.trainable_variables
+        gradient = tape.gradient(loss,  trainable_params)
+        self.policy.optimizer.apply_gradients(zip(gradient, \
+                                             trainable_params))
+        # empty the buffer
+        self.states = []
+        self.actions = []
+        self.rewards = []
+=>PYTHONTEX#PYGpython#default#defaultverb#35#verbatim###frame=single, indent=L#chap06.tex#384#
+import os
+import gymnasium as gym
+def train_agent_for_env(env, agent, max_episodes=1000):
+    scores, avgscores, avg100scores = [], [], []
+    for e in range(max_episodes):
+        done = False
+        score = 0
+        state = env.reset()[0]
+        state = np.expand_dims(state, axis=0)
+        while not done:
+            action = agent.choose_action(state)
+            next_state, reward, done, _, _ = env.step(action)
+            next_state = np.expand_dims(next_state, axis=0)
+            agent.store_transitions(state, action, reward)
+            score += reward
+            state = next_state
+        # end of while loop
+        # train the agent at the end of each episode
+        agent.train()
+        scores.append(score)
+        avgscores.append(np.mean(scores))
+        avg100scores.append(np.mean(scores[-100:]))
+        if e % 100== 0:
+            print('episode:{}, score: {:.2f}, avgscore: {:.2f}, \
+               avg100score: {:.2f}'.format(e, score, \
+                  np.mean(scores), np.mean(scores[-100:])))
+    # end of for-loop
+    file.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#36#verbatim###frame=single, indent=L#chap06.tex#427#
+import gymnasium as gym
+# instantiate a gym environment
+env = gym.make('CartPole-v0')
+obs_shape = env.observation_space.shape
+action_size = env.action_space.n
+print('Observation shape: ', obs_shape)
+print('Action Size: ', action_size)
+print('Max Episode steps: ', env.spec.max_episode_steps)
+# create an RL agent
+agent = REINFORCEAgent(obs_shape, action_size)
+# train the RL agent on
+train_agent_for_env(env, agent, max_episodes=2000)
+=>PYTHONTEX#PYGpython#default#defaultverb#37#verbatim###frame=single, indent=L#chap06.tex#493#
+import gymnasium as gym
+env = gym.make("LunarLander-v2", continuous=False)
+obs_shape = env.observation_space.shape
+action_size = env.action_space.n
+# create a RL agent
+agent = REINFORCEAgent2(obs_shape, action_size)
+# Train for the environment
+train_agent_for_env(env, agent, max_episodes=4000)
+=>PYTHONTEX#PYGpython#default#defaultverb#38#verbatim###frame=single, indent=L#chap06.tex#694#
+class OUActionNoise:
+    def __init__(self, mean, std_deviation, theta=0.15,
+                              dt=1e-2, x_initial=None):
+        self.theta = theta
+        self.mean = mean
+        self.std_dev = std_deviation
+        self.dt = dt
+        self.x_initial = x_initial
+        self.reset()
+
+    def __call__(self):
+        x = (
+            self.x_prev
+            + self.theta * (self.mean - self.x_prev) * self.dt
+            + self.std_dev * np.sqrt(self.dt) * \
+                     np.random.normal(size=self.mean.shape)
+        )
+        # Store x into x_prev
+        # Makes next noise dependent on current one
+        self.x_prev = x
+        return x
+
+    def reset(self):
+        if self.x_initial is not None:
+            self.x_prev = self.x_initial
+        else:
+            self.x_prev = np.zeros_like(self.mean)
+
+=>PYTHONTEX#PYGpython#default#defaultverb#39#verbatim###frame=single, indent=L#chap06.tex#745#
+class Actor():
+    def __init__(self, obs_shape, action_size,
+                 learning_rate=0.0003,
+                 action_upper_bound=1.0,
+                model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.lr = learning_rate
+        self.action_upper_bound = action_upper_bound
+        if model is None:
+            self.model = self._build_model()
+            self.target = self._build_model()
+        else:
+            self.model = model
+            self.target = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam()
+        # target shares same weights as the primary model in the beginning
+        self.target.set_weights(self.model.get_weights())
+
+    def _build_model(self):
+        initializer = tf.keras.initializers.RandomUniform(
+                                    minval=-0.01, maxval=0.01)
+        s_input = tf.keras.layers.Input(shape=self.obs_shape)
+        fc1 = tf.keras.layers.Dense(256, activation='relu',
+                                   kernel_initializer=initializer)(s_input)
+        fc2 = tf.keras.layers.Dense(256, activation='relu',
+                                   kernel_initializer=initializer)(fc1)
+        a_out = tf.keras.layers.Dense(self.action_size, activation='tanh',
+                                     kernel_initializer=initializer)(fc2)
+        a_out = a_out * self.action_upper_bound
+        model = tf.keras.models.Model(s_input, a_out, name='actor')
+        model.summary()
+        return model
+
+    def __call__(self, states, target=False):
+        states
+        if not target:
+            pi = self.model(states)
+        else:
+            pi = self.target(states)
+        return pi
+
+    def update_target(self, tau=0.01):
+        model_weights = self.model.get_weights()
+        target_weights = self.target.get_weights()
+        # update weights layer-by-layer using Polyak Averaging
+        new_weights = []
+        for w, w_dash in zip(model_weights, target_weights):
+            new_w = tau * w + (1 - tau) * w_dash
+            new_weights.append(new_w)
+        self.target.set_weights(new_weights)
+
+    def train(self, states, critic):
+        with tf.GradientTape() as tape:
+            actor_weights = self.model.trainable_variables
+            actions = self.model(states)
+            critic_values = critic(states, actions)
+            # -ve value is used to maximize the function
+            actor_loss = -tf.math.reduce_mean(critic_values)
+        actor_grad = tape.gradient(actor_loss, actor_weights)
+        self.optimizer.apply_gradients(zip(actor_grad, actor_weights))
+        return actor_loss
+
+=>PYTHONTEX#PYGpython#default#defaultverb#40#verbatim###frame=single, indent=L#chap06.tex#833#
+class Critic:
+    def __init__(self, obs_shape, action_size,
+                learning_rate=0.0003,
+                gamma=0.99,
+                model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.gamma = gamma
+        self.lr = learning_rate
+
+        if model is None:
+            self.model = self._build_model()
+            self.target = self._build_model()
+        else:
+            self.model = model
+            self.target = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
+
+        # target shares same weights as the main model in the beginning
+        self.target.set_weights(self.model.get_weights())
+
+    def _build_model(self):
+        s_input = tf.keras.layers.Input(shape=self.obs_shape)
+        s_out = tf.keras.layers.Dense(16, activation='relu')(s_input)
+        s_out = tf.keras.layers.Dense(32, activation='relu')(s_out)
+
+        # action as input
+        a_input = tf.keras.layers.Input(shape=(action_size, ))
+        a_out = tf.keras.layers.Dense(32, activation='relu')(a_input)
+
+        # concat [s, a]
+        concat = tf.keras.layers.Concatenate()([s_out, a_out])
+        out = tf.keras.layers.Dense(256, activation='relu')(concat)
+        out = tf.keras.layers.Dense(256, activation='relu')(out)
+        net_out = tf.keras.layers.Dense(1)(out)
+
+        # output is the Q-value output
+        model = tf.keras.models.Model(inputs=[s_input, a_input],
+                                      outputs=net_out, name='critic')
+        model.summary()
+        return model
+
+    def __call__(self, states, actions, target=False):
+        if not target:
+            value = self.model([states, actions])
+        else:
+            value = self.target([states, actions])
+        return value
+
+    def update_target(self, tau=0.01):
+        model_weights = self.model.get_weights()
+        target_weights = self.target.get_weights()
+        # update weights layer-by-layer using Polyak Averaging
+        new_weights = []
+        for w, w_dash in zip(model_weights, target_weights):
+            new_w = tau * w + (1 - tau) * w_dash
+            new_weights.append(new_w)
+        self.target.set_weights(new_weights)
+
+    def train(self, states, actions, rewards, next_states, dones, actor):
+        with tf.GradientTape() as tape:
+            critic_weights = self.model.trainable_variables
+            target_actions = actor(states, target=True)
+            target_q_values = self.target([next_states, target_actions])
+            y = rewards + self.gamma * (1-dones) * target_q_values
+            q_values = self.model([states, actions])
+            critic_loss = tf.math.reduce_mean(tf.square(y - q_values))
+        critic_grads = tape.gradient(critic_loss, critic_weights)
+        self.optimizer.apply_gradients(zip(critic_grads, critic_weights))
+        return critic_loss
+=>PYTHONTEX#PYGpython#default#defaultverb#41#verbatim###frame=single, indent=L#chap06.tex#920#
+class DDPGAgent:
+    def __init__(self, obs_shape, action_size,
+                 batch_size, buffer_capacity,
+                 action_upper_bound=1.0,
+                 action_lower_bound=-1.0,
+                lr_a=1e-3, lr_c=1e-3, gamma=0.99,
+                 noise_std=0.2,
+                actor_model=None,
+                critic_model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.buffer_capacity = buffer_capacity
+        self.batch_size = batch_size
+        self.action_upper_bound = action_upper_bound
+        self.action_lower_bound = action_lower_bound
+        self.gamma = gamma
+        self.lr_a = lr_a
+        self.lr_c = lr_c
+        self.noise_std = noise_std
+
+        self.actor = Actor(self.obs_shape, self.action_size,
+                           learning_rate=self.lr_a,
+                          action_upper_bound=self.action_upper_bound,
+                          model=actor_model)
+        self.critic = Critic(self.obs_shape, self.action_size,
+                            learning_rate=self.lr_c,
+                            gamma=self.gamma,
+                            model=critic_model)
+        self.buffer = ReplayBuffer(self.buffer_capacity)
+        self.action_noise = OUActionNoise(mean=np.zeros(1),
+                 std_deviation=float(self.noise_std) * np.ones(1))
+
+    def policy(self, state):
+        action = tf.squeeze(self.actor(state))
+        noise = self.action_noise()
+        # add noise to action
+        sampled_action = action.numpy() + noise
+        # check action bounds
+        valid_action = np.clip(sampled_action, self.action_lower_bound,
+                                           self.action_upper_bound)
+        return valid_action
+
+    def experience_replay(self):
+        if len(self.buffer) < self.batch_size:
+            return
+        mini_batch = self.buffer.sample(self.batch_size)
+        states = np.zeros((self.batch_size, *self.obs_shape))
+        next_states = np.zeros((self.batch_size, *self.obs_shape))
+        actions = np.zeros((self.batch_size, self.action_size))
+        rewards = np.zeros((self.batch_size, 1))
+        dones = np.zeros((self.batch_size, 1))
+        for i in range(len(mini_batch)):
+            states[i] = mini_batch[i][0]
+            actions[i] = mini_batch[i][1]
+            rewards[i] = mini_batch[i][2]
+            next_states[i] = mini_batch[i][3]
+            dones [i] = mini_batch[i][4]
+        states = tf.convert_to_tensor(states, dtype=tf.float32)
+        actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+        a_loss = self.actor.train(states, self.critic)
+        c_loss = self.critic.train(states, actions, rewards, \
+                           next_states, dones, self.actor)
+        return a_loss, c_loss
+
+    def update_targets(self, tau_a=0.01, tau_c=0.02):
+        self.actor.update_target(tau_a)
+        self.critic.update_target(tau_c)
+
+=>PYTHONTEX#PYGpython#default#defaultverb#42#verbatim###frame=single, indent=L#chap06.tex#1059#
+import gymnasium as gym
+import os
+import sys
+def solve_problem(env, agent, max_episodes=500):
+    tau_a, tau_c = 0.01, 0.01
+    scores = []
+    for e in range(max_episodes):
+        state = env.reset()[0]
+        ep_score = 0
+        done = False
+        steps = 0
+        while not done:
+            tf_state = tf.expand_dims(tf.convert_to_tensor(state), axis=0)
+            # take action
+            action = agent.policy(tf_state)
+            # make transition and receive reward
+            next_state, reward, done, _, _ = env.step(action)
+            # store experience in the replay buffer
+            agent.buffer.add((state, action, reward, next_state, done))
+            ep_score += reward
+            total_steps += 1
+            steps += 1
+            state = next_state
+            # train the agent
+            agent.experience_replay()
+            # update target models
+            agent.update_targets(tau_a, tau_c)
+            if steps > 200: # terminate the episode
+                done = True
+        # end of while loop
+        scores.append(ep_score)
+        if e % 20 == 0:
+            print(f'episode: {e}, score: {ep_score:.2f}, \
+            avg_score: {np.mean(scores):.2f}, \
+            avg50score: {np.mean(scores[-50:]):.2f}')
+    # end of for loop
+    file.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#43#verbatim###frame=single, indent=L#chap06.tex#1117#
+import gymnasium as gym
+# create an environment
+env = gym.make('Pendulum-v1', g=9.81, render_mode="rgb_array")
+
+obs_shape = env.observation_space.shape
+action_shape = env.action_space.shape
+action_size = action_shape[0]
+action_ub = env.action_space.high
+action_lb = env.action_space.low
+print('Observation shape: ', obs_shape)
+print('Action shape: ', action_shape)
+print('Max episodic Steps: ', env.spec.max_episode_steps)
+print('Action space bounds: ', (action_ub[0], action_lb[0]))
+
+# create an agent
+agent = DDPGAgent(obs_shape, action_size,
+                  batch_size=128, buffer_capacity=20000,
+                 action_upper_bound=2.0,
+                 action_lower_bound=-2.0)
+
+# solve a problem
+solve_problem(env, agent, max_episodes=500)
+=>PYTHONTEX#PYGpython#default#defaultverb#44#verbatim###frame=single, indent=L#chap06.tex#1632#
+import tensorflow as tf
+import numpy as np
+import tensorflow_probability as tfp
+class PPOActor():
+    def __init__(self, obs_shape, action_size,
+                 learning_rate=0.0003,
+                 action_upper_bound=1.0,
+                 epsilon=0.2, lmbda=0.5, kl_target=0.1,
+                 beta=0.1, entropy_coeff=0.2,
+                 critic_loss_coeff=0.1,
+                 grad_clip=10.0,
+                 method='clip',
+                model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.action_ub = action_upper_bound
+        self.lr = learning_rate
+        self.epsilon = epsilon # clip on ratio
+        self.lam = lmbda # required for penalty method
+        self.beta = beta # kl penalty coefficient
+        self.entropy_coeff = entropy_coeff
+        self.c_loss_coeff = critic_loss_coeff
+        self.method = method # choose between 'clip' and 'penalty'
+        self.kl_target = kl_target
+        self.kl_value = 0 # to store most recent kld value
+        self.grad_clip = grad_clip # applying gradient clipping
+        # create actor model
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(self.lr)
+        # additional parameters
+        logstd = tf.Variable(np.zeros(shape=(self.action_size, )), \
+                                             dtype=np.float32)
+        self.model.logstd = logstd
+        self.model.trainable_variables.append(logstd)
+
+    def _build_model(self):
+        last_init = tf.random_uniform_initializer(minval=-0.01, maxval=0.01)
+        state_input = tf.keras.layers.Input(shape=self.obs_shape)
+        x = tf.keras.layers.Dense(128, activation='relu')(state_input)
+        x = tf.keras.layers.Dense(64, activation='relu')(x)
+        x = tf.keras.layers.Dense(64, activation='relu')(x)
+        net_out = tf.keras.layers.Dense(self.action_size, activation='tanh',
+                                       kernel_initializer=last_init)(x)
+        net_out = net_out * self.action_ub
+        model = tf.keras.models.Model(state_input, net_out, name='actor')
+        model.summary()
+        return model
+
+    def __call__(self, state):
+        # input is a tensor
+        mean = tf.squeeze(self.model(state))
+        std = tf.squeeze(tf.exp(self.model.logstd))
+        return mean, std # return tensor
+
+    def train(self, state_batch, action_batch, advantages, old_pi, c_loss):
+        with tf.GradientTape() as tape:
+            mean = tf.squeeze(self.model(state_batch))
+            std = tf.squeeze(tf.exp(self.model.logstd))
+            pi = tfp.distributions.Normal(mean, std)
+            # r = pi/pi_old
+            ratio = tf.exp(pi.log_prob(tf.squeeze(action_batch)) -
+                          old_pi.log_prob(tf.squeeze(action_batch)))
+            if ratio.ndim > advantages.ndim: # match shapes
+                ratio = tf.reduce_mean(ratio, axis=-1)
+            surr_obj = ratio * advantages # surrogate objective function
+            # current kl divergence (kld) value
+            kld = tfp.distributions.kl_divergence(old_pi, pi)
+            if kld.ndim > advantages.ndim:
+                kld = tf.reduce_mean(kld, axis=-1)
+            self.kl_value = tf.reduce_mean(kld)
+            entropy = tf.reduce_mean(pi.entropy()) # entropy
+            if self.method == 'penalty':
+                actor_loss = -(tf.reduce_mean(surr_obj - self.beta * kld))
+            elif self.method == 'clip':
+                l_clip = tf.reduce_mean(
+                        tf.minimum(surr_obj, tf.clip_by_value(ratio,
+                        1.-self.epsilon, 1.+self.epsilon) * advantages))
+                actor_loss = -(l_clip - self.c_loss_coeff * c_loss  + \
+                              self.entropy_coeff * entropy)
+            else:
+                raise ValueError('invalid option for PPO method')
+            actor_weights = self.model.trainable_variables
+            actor_grad = tape.gradient(actor_loss, actor_weights)
+            if self.grad_clip is not None:
+                actor_grad = [tf.clip_by_value(grad,\
+                     -1 * self.grad_clip, self.grad_clip)\
+                                    for grad in actor_grad]
+        #outside gradient tape
+        self.optimizer.apply_gradients(zip(actor_grad, actor_weights))
+        return actor_loss.numpy()
+
+    def update_beta(self):
+        # update beta after each epoch
+        if self.kl_value < self.kl_target / 1.5:
+            self.beta /= 2.
+        elif self.kl_value > self.kl_target * 1.5:
+            self.beta *= 2.
+
+=>PYTHONTEX#PYGpython#default#defaultverb#45#verbatim###frame=single, indent=L#chap06.tex#1748#
+class PPOCritic():
+    def __init__(self, obs_shape, action_size,
+                 learning_rate=0.0003,
+                 gamma=0.99,
+                 grad_clip = None,
+                 model=None):
+        self.lr = learning_rate
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.gamma = gamma
+        self.grad_clip = grad_clip
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(self.lr)
+
+    def __call__(self, state):
+        # input is a tensor
+        value = tf.squeeze(self.model(state))
+        return value
+
+    def _build_model(self):
+        state_input = tf.keras.layers.Input(shape=self.obs_shape)
+        out = tf.keras.layers.Dense(64, activation="relu")(state_input)
+        out = tf.keras.layers.Dense(64, activation="relu")(out)
+        out = tf.keras.layers.Dense(64, activation="relu")(out)
+        net_out = tf.keras.layers.Dense(1)(out)
+        # Outputs single value for give state-action
+        model = tf.keras.models.Model(inputs=state_input, outputs=net_out)
+        model.summary()
+        return model
+
+    def train(self, state_batch, disc_rewards):
+        with tf.GradientTape() as tape:
+            critic_weights = self.model.trainable_variables
+            critic_value = tf.squeeze(self.model(state_batch))
+            critic_loss = tf.math.reduce_mean(
+                        tf.square(disc_rewards - critic_value))
+            critic_grad = tape.gradient(critic_loss, critic_weights)
+            if self.grad_clip is not None:
+                critic_grad = [tf.clip_by_value(grad, \
+                     -1.0 * self.grad_clip, self.grad_clip) \
+                                    for grad in critic_grad]
+        # outside the gradient tape
+        self.optimizer.apply_gradients(zip(critic_grad, critic_weights))
+        return critic_loss.numpy()
+=>PYTHONTEX#PYGpython#default#defaultverb#46#verbatim###frame=single, indent=L#chap06.tex#1817#
+class PPOAgent:
+    def __init__(self, obs_shape, action_size, batch_size,
+                 action_upper_bound=1.0,
+                 lr_a=1e-3, lr_c=1e-3,
+                 gamma=0.99,            # discount factor
+                 lmbda=0.5,            # required for GAE
+                 beta=0.01,              # KL penalty coefficient
+                 epsilon=0.2,           # action clip boundary
+                 kl_target=0.01,        # required for KL penalty method
+                 entropy_coeff=0.01,     # entropy coefficient
+                 c_loss_coeff=0.01,      # critic loss coefficient
+                 grad_clip=None,
+                 method='clip',         # choose between 'clip' & 'penalty'
+                 actor_model=None,
+                 critic_model=None):
+        self.name='ppo'
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.actor_lr = lr_a
+        self.critic_lr = lr_c
+        self.batch_size = batch_size
+        self.gamma = gamma # discount factor
+        self.action_upper_bound = action_upper_bound
+        self.epsilon = epsilon # clip boundary for prob ratio
+        self.lmbda = lmbda # required for GAE
+        self.initial_beta = beta # required for penalty method
+        self.kl_target = kl_target # required for updating beta
+        self.method = method # choose between 'clip' & 'penalty'
+        self.c_loss_coeff = c_loss_coeff
+        self.entropy_coeff = entropy_coeff
+        self.grad_clip = grad_clip # apply gradient clipping
+        # Actor Model
+        self.actor = PPOActor(self.obs_shape, self.action_size,
+                              learning_rate=self.actor_lr,
+                              action_upper_bound=self.action_upper_bound,
+                              epsilon=self.epsilon,
+                              lmbda=self.lmbda,
+                              kl_target=self.kl_target,
+                              beta=self.initial_beta,
+                              entropy_coeff=self.entropy_coeff,
+                              critic_loss_coeff=self.c_loss_coeff,
+                              method=self.method,
+                              grad_clip=self.grad_clip,
+                              model=actor_model)
+        # Critic Model
+        self.critic = PPOCritic(self.obs_shape, self.action_size,
+                               learning_rate=self.critic_lr,
+                                gamma=self.gamma,
+                                grad_clip=self.grad_clip,
+                                model=critic_model)
+
+
+    def policy(self, state, greedy=False):
+        tf_state = tf.expand_dims(tf.convert_to_tensor(state), axis=0)
+        mean, std = self.actor(tf_state)
+        if greedy:
+            action = mean
+        else:
+            pi = tfp.distributions.Normal(mean, std)
+            action = pi.sample()
+            action = tf.reshape(action, shape=(self.action_size, ))
+        valid_action = tf.clip_by_value(action, -self.action_upper_bound,
+                                        self.action_upper_bound)
+        return valid_action.numpy()
+
+    def train(self, states, actions, rewards, next_states, dones, epochs=20):
+        states = tf.convert_to_tensor(states, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+        actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+        # compute advantage & discounted returns
+        target_values, advantages = self.compute_advantages(
+                              states, rewards, next_states, dones)
+        target_values = tf.convert_to_tensor(target_values, dtype=tf.float32)
+        advantages = tf.convert_to_tensor(advantages, dtype=tf.float32)
+        # current action probability distribution
+        mean, std = self.actor(states)
+        pi = tfp.distributions.Normal(mean, std)
+        n_split = len(rewards) // self.batch_size
+        assert n_split > 0, 'buffer length must be greater than batch_size'
+        indexes = np.arange(n_split, dtype=int)
+        # training
+        a_loss_list, c_loss_list, kl_list = [], [], []
+        for _ in range(epochs):
+            np.random.shuffle(indexes)
+            for i in indexes:
+                old_pi = pi[i * self.batch_size: (i+1) * self.batch_size]
+                s_split = tf.gather(states, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                a_split = tf.gather(actions, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                tv_split = tf.gather(target_values, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                adv_split = tf.gather(advantages, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                # update critic
+                cl = self.critic.train(s_split, tv_split)
+                c_loss_list.append(cl)
+                # update actor
+                al = self.actor.train(s_split, a_split, \
+                                       adv_split, old_pi, cl)
+                a_loss_list.append(al)
+                kl_list.append(self.actor.kl_value)
+            # update lambda once in each epoch
+            if self.method == 'penalty':
+                self.actor.update_beta()
+        # end of epoch loop
+        actor_loss = np.mean(a_loss_list)
+        critic_loss = np.mean(c_loss_list)
+        kld_mean = np.mean(kl_list)
+        return actor_loss, critic_loss, kld_mean
+
+    def compute_advantages(self, states, rewards, next_states, dones):
+        # input/output are tensors
+        s_values = self.critic(states)
+        ns_values = self.critic(next_states)
+        # advantage should have same shape as that of values
+        adv = np.zeros_like(s_values)
+        returns = np.zeros_like(s_values)
+        discount = self.gamma
+        lmbda = self.lmbda
+        returns_current = ns_values[-1] # last value
+        g = 0 # GAE
+        for i in reversed(range(len(rewards))):
+            gamma = discount * (1. - dones[i])
+            td_error = rewards[i] + gamma * ns_values[i] - s_values[i]
+            g = td_error + gamma * lmbda * g
+            returns_current = rewards[i] + gamma * returns_current
+            adv[i] = g
+            returns[i] = returns_current
+        adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
+        return returns, adv
+
+    @property
+    def penalty_coefficient(self):
+        # returns penalty coefficienty
+        return self.actor.beta
+=>PYTHONTEX#PYGpython#default#defaultverb#47#verbatim###frame=single, indent=L#chap06.tex#1972#
+def collect_trajectories(env, agent, tmax=1000, max_steps=200):
+    states, next_states, actions = [], [], []
+    rewards, dones = [], []
+    ep_count = 0        # episode count
+    state = env.reset()[0]
+    step = 0
+    for t in range(tmax):
+        step += 1
+        action = agent.policy(state)
+        next_state, reward, done, _, _ = env.step(action)
+        states.append(state)
+        actions.append(action)
+        next_states.append(next_state)
+        rewards.append(reward)
+        dones.append(done)
+        state = next_state
+        if max_steps is not None and step > max_steps:
+            done = True
+        if done:
+            ep_count += 1
+            state = env.reset()[0]
+            step = 0
+    return states, actions, rewards, next_states, dones, ep_count
+
+ ppo_train(env, agent, max_buffer_len=1000, max_seasons=100, epochs=20,
+             max_steps=None, stop_score=None):
+    print('Environment name: ', env.spec.name)
+    print('RL Agent name:', agent.name)
+    best_score = -np.inf
+    season_scores = []
+    total_ep_cnt = 0
+    for s in range(max_seasons):
+        # collect trajectories
+        states, actions, rewards, next_states, dones, ep_count = \
+            collect_trajectories(env, agent, tmax=max_buffer_len, \
+                                             max_steps=max_steps)
+        total_ep_cnt += (ep_count+1)
+        # train the agent
+        a_loss, c_loss, kld_value = agent.train(states, actions, rewards,
+                          next_states, dones, epochs=epochs)
+        season_score = np.sum(rewards, axis=0) / (ep_count + 1)
+        season_scores.append(season_score)
+        if season_score > best_score:
+            best_score = season_score
+            agent.save_weights()
+        if stop_score is not None and season_score > stop_score:
+            print(f'Problem is solved in {s} seasons\
+                           or {total_ep_cnt} episodes.' )
+            break
+        print(f'season: {s}, episodes: {total_ep_cnt}, \
+               season_score: {season_score:.2f},\
+               avg_ep_reward: {np.mean(season_scores):.2f},\
+               best_score: {best_score:.2f}')
+
+=>PYTHONTEX#PYGpython#default#defaultverb#48#verbatim###frame=single, indent=L#chap06.tex#2042#
+import gymnasium as gym
+env = gym.make('Pendulum-v1')
+obs_shape = env.observation_space.shape
+action_shape = env.action_space.shape
+action_size = action_shape[0]
+action_ub = env.action_space.high
+action_lb = env.action_space.low
+print('Observation shape: ', obs_shape)
+print('Action shape: ', action_shape)
+print('Max episodic Steps: ', env.spec.max_episode_steps)
+print('Action space bounds: ', (action_ub[0], action_lb[0]))
+
+# create a ppo agent
+ppo_agent = PPOAgent(obs_shape, action_size,
+                     batch_size=200],
+                     action_upper_bound=action_ub,
+                     entropy_coeff=0.0,
+                     c_loss_coeff=0.0,
+                     kl_target=0.01,
+                     gamma=0.99, beta=0.01,
+                     epsilon=0.1, lmbda=0.95,
+                    grad_clip=None,
+                    method='clip')
+
+# train the agent
+ppo_train(env, ppo_agent, max_buffer_len=10000,
+      max_seasons=100, epochs=20, max_steps=200, stop_score=200)
+=>PYTHONTEX#PYGpython#default#defaultverb#49#verbatim###frame=single, indent=L#chap06.tex#2110#
+import gymnasium as gym
+env = gym.make('LunarLander-v2', continuous=True)
+obs_shape = env.observation_space.shape
+action_shape = env.action_space.shape
+action_size = action_shape[0]
+action_ub = env.action_space.high
+action_lb = env.action_space.low
+print('environment name: ', env.spec.name)
+print('Observation shape: ', obs_shape)
+print('Action shape: ', action_shape)
+print('Max episodic Steps: ', env.spec.max_episode_steps)
+print('Action space bounds: ', (action_ub, action_lb))
+
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='tanh')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
+
+a_model = create_actor_model(obs_shape, action_size)
+c_model = create_critic_model(obs_shape, action_size)
+
+ CFG = dict(
+    batch_size=200,
+    entropy_coeff = 0.0,   # required for CLIP method
+    c_loss_coeff = 0.0,    # required for CLIP method
+    grad_clip = None,
+    method = 'clip', # choose between 'clip' or 'penalty'
+    kl_target = 0.01, # required for penalty method
+    beta = 0.01,  # required for penalty method
+    epsilon = 0.3,  # required for clip method
+    gamma = 0.99,
+    lam = 0.95,     # used for GAE
+    buffer_capacity = 20000, # next try with 50000
+    lr_a = 1e-3,
+    lr_c = 1e-3,
+    training_epochs=20,
+)
+
+agent = PPOAgent(obs_shape, action_size,
+                     batch_size=20000,
+                     action_upper_bound=action_ub,
+                     entropy_coeff=0.0,
+                     c_loss_coeff=0.0,
+                     kl_target=0.01,
+                     gamma=0.99, beta=0.01,
+                     epsilon=0.3, lmbda=0.95,
+                    grad_clip=None, method='clip',
+                    lr_a=1e-3, lr_c=1e-3,
+                    actor_model=a_model,
+                    critic_model=c_model)
+
+ppo_train(env, ppo_agent, max_buffer_len=CFG['buffer_capacity'],
+              max_seasons=500,
+             epochs=CFG['batch_size'],
+             stop_score=200, max_steps=200,
+             wandb_log=True)
+=>PYTHONTEX#PYGpython#default#defaultverb#50#verbatim###frame=single, indent=L#chap07.tex#161#
+class Actor():
+	def __init__(self, obs_shape, action_size, lr=1e-4, model=None):
+		self.obs_shape = obs_shape
+		self.action_size = action_size
+		self.lr = lr
+		if model is None:
+		self.model = self._build_model()
+		else:
+		self.model = model
+		self.optimizer = tf.keras.optimizers.Adam(
+               learning_rate=self.lr)
+
+
+	def _build_model(self): # outputs action probabilities
+		sinput = tf.keras.layers.Input(shape=self.obs_shape)
+		x = tf.keras.layers.Dense(512, activation='relu',
+		   kernel_initializer=tf.keras.initializers.HeUniform())(sinput)
+		x = tf.keras.layers.Dense(512, activation='relu',
+		   kernel_initializer=tf.keras.initializers.HeUniform())(x)
+		aout = tf.keras.layers.Dense(self.action_size,
+         activation='softmax',
+		   kernel_initializer=tf.keras.initializers.HeUniform())(x)
+		model = tf.keras.models.Model(sinput, aout, name='actor')
+		model.summary()
+		return model
+
+	def __call__(self, states):
+		# returns action probabilities for each state
+		pi = tf.squeeze(self.model(states))
+		return pi
+
+	def compute_actor_loss(self, states, actions, td_error):
+		pi = self.model(states)
+		action_dist = tfp.distributions.Categorical(
+            probs=pi, dtype=tf.float32)
+		log_prob = action_dist.log_prob(actions)
+		actor_loss = -log_prob * td_error
+		return tf.math.reduce_mean(actor_loss)				
+=>PYTHONTEX#PYGpython#default#defaultverb#51#verbatim###frame=single, indent=L#chap07.tex#206#
+class Critic():
+    def __init__(self, obs_shape,
+                lr = 1e-4, gamma=0.99, model=None):
+        self.obs_shape = obs_shape
+        self.gamma = gamma
+        self.lr = lr
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = model
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
+
+
+    def _build_model(self): # returns V(s)
+        sinput = tf.keras.layers.Input(shape=self.obs_shape)
+        x = tf.keras.layers.Dense(128, activation='relu')(sinput)
+        x = tf.keras.layers.Dense(256, activation='relu')(x)
+        x = tf.keras.layers.Dense(256, activation='relu')(x)
+        vout = tf.keras.layers.Dense(1, activation='relu')(x)
+        model = tf.keras.models.Model(inputs= sinput, outputs=vout,
+                                      name='critic')
+        model.summary()
+        return model
+
+    def __call__(self, states):
+        # returns V(s) for each state
+        value = tf.squeeze(self.model(states))
+        return value
+=>PYTHONTEX#PYGpython#default#defaultverb#52#verbatim###frame=single, indent=L#chap07.tex#241#
+class ACAgent():
+    def __init__(self, obs_shape, action_size,
+                lr_a=1e-4, lr_c=1e-4, gamma=0.99,
+                a_model=None, c_model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.gamma = gamma
+        self.lr_a = lr_a
+        self.lr_c = lr_c
+        self.name = 'actor-critic'
+
+        # actor model
+        self.actor = Actor(self.obs_shape, self.action_size,
+                          lr=self.lr_a, model=a_model)
+        # critic model
+        self.critic = Critic(self.obs_shape, lr=self.lr_c,
+                             gamma=self.gamma, model=c_model)
+
+    def policy(self, state):
+        state = tf.expand_dims(
+            tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
+        pi = self.actor(state) # action probabilities
+        action_dist = tfp.distributions.Categorical(
+                              probs=pi, dtype=tf.float32)
+        action = action_dist.sample()
+        return int(action.numpy())
+
+
+    def train(self, state, action, reward, next_state, done):
+        state = tf.expand_dims(
+               tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
+        action= tf.convert_to_tensor(action, dtype=tf.float32)
+        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
+        next_state = tf.expand_dims(
+               tf.convert_to_tensor(next_state, dtype=tf.float32),
+               axis=0)
+        done = tf.convert_to_tensor(done, dtype=tf.float32)
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            value = self.critic(state)
+            next_value = self.critic(next_state)
+            td_target = reward + self.gamma * next_value * (1 - done)
+            td_error = td_target - value
+            a_loss = self.actor.compute_actor_loss(state, action, td_error)
+            c_loss = tf.math.reduce_mean(tf.square(td_target - value))
+
+        actor_grads = tape1.gradient(a_loss,
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(c_loss,
+                     self.critic.model.trainable_variables)
+        self.actor.optimizer.apply_gradients(zip(actor_grads,
+                              self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(zip(critic_grads,
+                           self.critic.model.trainable_variables))
+        return a_loss, c_loss
+=>PYTHONTEX#PYGpython#default#defaultverb#53#verbatim###frame=single, indent=L#chap07.tex#311#
+def train(env, agent, max_episodes=10000, log_freq=50,
+            min_score=-200, max_score=200,
+             stop_score=200):
+
+    print('Environment name: ', env.spec.id)
+    print('RL Agent name:', agent.name)
+
+    assert isinstance(env.action_space, gym.spaces.Discrete),\
+                "AC Agent only for discrete action spaces"
+
+    ep_scores = []
+    best_score = -np.inf
+    for e in range(max_episodes):
+        done = False
+        state = env.reset()[0]
+        ep_score = 0
+        a_losses, c_losses = [], []
+        while not done:
+            action = agent.policy(state)
+            next_state, reward, done, _, _ = env.step(action)
+            a_loss, c_loss = agent.train(state, action,
+                                 reward, next_state, done)
+            a_losses.append(a_loss)
+            c_losses.append(c_loss)
+            state = next_state
+            ep_score += reward
+        # while loop ends here
+        ep_scores.append(ep_score)
+
+        if e % log_freq == 0:
+            print(f'e:{e}, ep_score:{ep_score:.2f},
+                     avg_ep_score:{np.mean(ep_scores):.2f},\
+                        avg100score:{np.mean(ep_scores[-100:]):.2f}, \
+                           best_score:{best_score:.2f}')
+
+        if ep_score > best_score:
+            best_score = ep_score
+            agent.save_weights()
+            print(f'Best Score: {ep_score}, episode: {e}. Model saved.')
+
+        if np.mean(ep_scores[-100:]) > stop_score:
+            print('The problem is solved in {} episodes'.format(e))
+            break
+    # for loop ends here
+=>PYTHONTEX#PYGpython#default#defaultverb#54#verbatim###frame=single, indent=L#chap07.tex#363#
+import gymnasium as gym
+from actor_critic import ACAgent
+if __name__ == '__main__':
+    env = gym.make('CartPole-v1')
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    print("Observation shape: ", obs_shape)
+    print("Action Size: ", action_size)
+    print("Max Episode steps: ", env.spec.max_episode_steps)
+
+    # create an RL agent
+    agent = ACAgent(obs_shape, action_size)
+
+    # train the RL agent on
+    train(env, agent, max_episodes=1500, log_freq=100,
+             stop_score=499)
+=>PYTHONTEX#PYGpython#default#defaultverb#55#verbatim###frame=single, indent=L#chap07.tex#420#
+import gymnasium as gym
+from actor_critic import ACAgent
+if __name__ == '__main__':
+    env = gym.make('LunarLander-v3')
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    print("Observation shape: ", obs_shape)
+    print("Action Size: ", action_size)
+    print("Max Episode steps: ", env.spec.max_episode_steps)
+
+    # create an RL agent
+    agent = ACAgent(obs_shape, action_size)
+
+    # train the RL agent on
+    train(env, agent, max_episodes=1500, min_score=-500, log_freq=100,
+             stop_score=200)
+=>PYTHONTEX#PYGpython#default#defaultverb#56#verbatim###frame=single, indent=L#chap07.tex#538#
+import tensorflow_probability as tfp
+class A2CAgent:
+    def __init__(self, obs_shape, action_size,
+                 lr_a=1e-4, lr_c=1e-3, gamma=0.99,
+                 entropy_beta=0.01, grad_clip_norm=5.0,
+                 a_model=None, c_model=None):
+        self.lr_a = lr_a
+        self.lr_c = lr_c
+        self.entropy_beta = entropy_beta
+        self.grad_clip_norm = grad_clip_norm
+
+        self.gamma = gamma
+        self.action_size = action_size
+        self.obs_shape = obs_shape
+        self.name = 'A2C_v2'
+
+        # create actor and critic networks
+        self.actor = Actor(obs_shape, action_size, lr=self.lr_a,
+                           model=a_model)
+        self.critic = Critic(obs_shape, lr=self.lr_c,
+                             gamma=self.gamma, model=c_model)
+
+    def policy(self, state):
+        state = tf.expand_dims(
+            tf.convert_to_tensor(state, dtype=tf.float32),
+               axis=0)
+        pi = self.actor(state)
+        pi_np = pi.numpy()
+        action_probs = tfp.distributions.Categorical(probs=pi)
+        action = action_probs.sample()
+        return action.numpy()
+
+    def compute_advantages(self, rewards, values, next_values, dones):
+        advantages = rewards + \
+            self.gamma * next_values * (1.0 - dones) - values
+        # normalize advantages
+        advantages = (advantages - np.mean(advantages))
+                     / (np.std(advantages) + 1e-8)
+        return advantages
+
+    def compute_actor_loss(self, states, actions, advantages):
+        probs = self.actor(states)
+        action_dist = tfp.distributions.Categorical(
+                           probs=probs, dtype=tf.float32)
+        log_probs = action_dist.log_prob(actions)
+        actor_loss = -tf.reduce_mean(log_probs * advantages)
+
+        # entropy regularization
+        entropy = action_dist.entropy()
+        actor_loss -= self.entropy_beta * tf.reduce_mean(entropy)
+        return actor_loss
+
+
+    def train(self, states, actions, rewards, next_states, dones):
+        states = np.array(states, dtype=np.float32)
+        actions = np.array(actions, dtype=np.int32)
+        rewards = np.array(rewards, dtype=np.float32)
+        next_states = np.array(next_states, dtype=np.float32)
+        dones = np.array(dones, dtype=np.float32)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            next_values = self.critic(next_states)
+            advantages = self.compute_advantages(
+                        rewards, values, next_values, dones)
+            actor_loss = self.compute_actor_loss(states,
+                                             actions,advantages)
+            critic_loss = tf.reduce_mean(tf.square(advantages))
+
+        # compute gradients
+        actor_grads = tape1.gradient(actor_loss,
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss,
+                     self.critic.model.trainable_variables)
+
+        # apply gradients to the models
+        self.actor.optimizer.apply_gradients(
+            zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(
+            zip(critic_grads, self.critic.model.trainable_variables))
+        return actor_loss.numpy(), critic_loss.numpy()
+=>PYTHONTEX#PYGpython#default#defaultverb#57#verbatim###frame=single, indent=L#chap07.tex#627#
+class A2CAgent():
+    def init(self):
+        pass
+
+    def policy(self, state):
+        pass
+
+    def compute_discounted_rewards(self, states, actions, rewards):
+        discounted_rewards = []
+        sum_rewards = 0
+        for r in reversed(rewards):
+            sum_rewards = r + self.gamma * sum_rewards
+            discounted_rewards.insert(0, sum_rewards)
+        discounted_rewards = np.array(discounted_rewards)
+        states = np.array(states, dtype=np.float32)
+        actions = np.array(actions, dtype=np.int32)
+        return states, actions, discounted_rewards
+
+
+    def compute_actor_loss(self, states, actions, td_error):
+        probs = self.actor(states)
+        action_dist = tfp.distributions.Categorical(
+               probs=probs, dtype=tf.float32)
+        log_probs = action_dist.log_prob(actions)
+        actor_loss = -tf.reduce_mean(log_probs * td_error)
+        # entropy regularization
+        entropy = action_dist.entropy()
+        actor_loss -= self.entropy_beta * tf.reduce_mean(entropy)
+        return actor_loss
+
+    def train(self, states, actions, rewards):
+        states, actions, discnt_rewards = \
+              self.compute_discounted_rewards(states, actions, rewards)
+        discnt_rewards = tf.convert_to_tensor(
+                           discnt_rewards, dtype=tf.float32)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            td_error = tf.math.subtract(discnt_rewards, values)
+            actor_loss = self.actor.compute_actor_loss(states,
+                                                actions, td_error)
+            critic_loss = tf.reduce_mean(tf.square(td_error))
+
+        actor_grads = tape1.gradient(actor_loss,
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss,
+                     self.critic.model.trainable_variables)
+
+        self.actor.optimizer.apply_gradients(
+                  zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(
+                  zip(critic_grads, self.critic.model.trainable_variables))
+        return actor_loss.numpy(), critic_loss.numpy()
+
+=>PYTHONTEX#PYGpython#default#defaultverb#58#verbatim###frame=single, indent=L#chap07.tex#688#
+def a2c_train(env, agent, max_episodes=10000, log_freq=50,
+               max_score=None, min_score=None,
+               stop_score=500):
+    print('Environment name: ', env.spec.id)
+    print('RL Agent name:', agent.name)
+
+    assert isinstance(env.action_space, gym.spaces.Discrete),\
+                "A2C Agent only for discrete action spaces"
+
+    ep_scores = []
+    best_score = -np.inf
+    for e in range(max_episodes):
+        states, actions, rewards = [], [], []
+        done = False
+        state = env.reset()[0]
+        ep_score = 0
+        while not done:
+            action = agent.policy(state)
+            next_state, reward, done, _, _ = env.step(action)
+            rewards.append(reward)
+            states.append(state)
+            actions.append(action)
+            state = next_state
+            ep_score += reward
+
+            if max_score is not None and
+                     ep_score >= max_score:
+                done = True
+            if min_score is not None and
+                     ep_score <= min_score:
+                done = True
+
+            if done:
+                ep_scores.append(ep_score)
+                # train the agent
+                a_loss, c_loss = agent.train(states, actions, rewards)
+
+        # while loop ends here
+
+        if e % log_freq == 0:
+            print(f'e:{e}, ep_score:{ep_score:.2f},\
+              avg_ep_score:{np.mean(ep_scores):.2f},\
+               avg100score:{np.mean(ep_scores[-100:]):.2f}, \
+                best_score:{best_score:.2f}')
+
+        if ep_score > best_score:
+            best_score = ep_score
+            agent.save_weights()
+            print(f'Best Score: {ep_score}, episode: {e}. Model saved.')
+
+    # for loop ends here
+=>PYTHONTEX#PYGpython#default#defaultverb#59#verbatim###frame=single, indent=L#chap07.tex#755#
+import gymnasium as gym
+# create actor & Critic models
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
+
+if __name__ == '__main__':
+    # Create Gym environment
+    env = gym.make('LunarLander-v3', render_mode='rgb_array')
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    print("Observation shape: ", obs_shape)
+    print("Action Size: ", action_size)
+    print("Max Episode steps: ", env.spec.max_episode_steps)
+
+    actor_net = create_actor_model(obs_shape, action_size)
+    critic_net = create_critic_model(obs_shape)
+
+    # create an RL agent
+    agent = A2CAgent(obs_shape, action_size,
+                   a_model=actor_net,  c_model=critic_net)
+
+    # train the RL agent on
+    a2c_train(env, agent, max_episodes=1500, log_freq=100,
+         stop_score=200, max_score=500, min_score=-300)
+=>PYTHONTEX#PYGpython#default#defaultverb#60#verbatim###frame=single, indent=L#chap07.tex#888#
+import gymnasium as gym
+import numpy as np
+import multiprocessing
+import time
+import gc
+import queue
+from a2c import A2CAgent
+from collections import deque
+
+# Disable GPU for this script
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+import tensorflow as tf
+import tensorflow_probability as tfp
+
+# Worker function for each process
+def worker(worker_id, global_weights_queue,
+           gradients_queue, save_request_queue, env_id,
+           create_actor_func=None,
+           create_critic_func=None,
+           max_episodes=1500, max_score = 500,
+           min_score = -500, max_steps = None):
+
+    # Set random seed for reproducibility in each process
+    tf.random.set_seed(worker_id + 1)
+    np.random.seed(worker_id + 1)
+
+    # create environment
+    env = gym.make(env_id)
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    # Create local network and environment
+    if create_actor_func is not None:
+        actor = create_actor_func(obs_shape, action_size)
+    else:
+        actor = None
+
+    if create_critic_func is not None:
+        critic = create_critic_func(obs_shape)
+    else:
+        critic = None
+    local_network = A2CAgent(obs_shape, action_size,
+                             a_model=actor, c_model=critic)
+
+    # collect experience tuple and compute gradients
+    # for the local network
+    episode = 0
+    ep_scores = []
+    best_score = -np.inf
+    for episode in range(max_episodes):
+        weights_updated = False
+        for _ in range(3):  # Retry up to 3 times
+            try:
+                global_weights = global_weights_queue.get_nowait()
+                local_network.set_weights(*global_weights)
+                weights_updated = True
+                break # retrieval success
+            except queue.Empty:
+                time.sleep(0.1)  # Brief pause before retry
+        if not weights_updated:
+            continue # Continue with current weights if queue is empty
+
+        state = env.reset()[0]
+        episode_reward = 0
+        done = False
+        step = 0
+        states = deque(maxlen=max_steps \
+               if max_steps is not None else 1000)
+        actions = deque(maxlen=max_steps \
+               if max_steps is not None else 1000)
+        rewards = deque(maxlen=max_steps \
+               if max_steps is not None else 1000)
+
+        # Collect trajectory
+        while not done:
+            action = int(local_network.policy(state))
+            next_state, reward, done, truncated, _ = env.step(action)
+            done = done or truncated
+
+            states.append(state) # type: ignore
+            actions.append(action)
+            rewards.append(reward)
+
+            state = next_state
+            episode_reward += reward
+
+            step += 1
+
+            if max_score is not None and episode_reward >= max_score:
+                done = True
+            if min_score is not None and episode_reward <= min_score:
+                done = True
+            if max_steps is not None and step >= max_steps:
+                done = True
+
+        # end of episode
+        ep_scores.append(episode_reward)
+
+        # update the local network
+        a_loss, c_loss, actor_grads, critic_grads = \
+               local_network.compute_gradients(
+            states, actions, rewards
+        )
+
+        # Update global network
+        try:
+            gradients_queue.put_nowait((actor_grads, critic_grads))
+        except queue.Full:
+            continue # queue full, skip updated
+
+
+        if episode_reward > best_score:
+            best_score = episode_reward
+
+        try:
+            save_request_queue.put_nowait(
+                  (worker_id, episode, episode_reward))
+        except queue.Full:  # skip save request
+            continue
+
+        # free memory
+        tf.keras.backend.clear_session()  # Clear TensorFlow session
+        states.clear()
+        actions.clear()
+        rewards.clear()
+        gc.collect()  # Collect garbage to free memory
+    # end of for-loop
+    env.close()
+=>PYTHONTEX#PYGpython#default#defaultverb#61#verbatim###frame=single, indent=L#chap07.tex#1039#
+def run_workers(env_name, max_num_workers=5, max_episodes=1500,
+         wandb_log=True, max_score=500, min_score=-200,
+         max_steps=1000,
+         create_actor_func=None,
+         create_critic_func=None):
+    # Set random seed for reproducibility
+    tf.random.set_seed(42)
+    np.random.seed(42)
+
+    N_WORKERS = min(multiprocessing.cpu_count(), max_num_workers)
+    print('N_WORKERS:', N_WORKERS)
+
+
+    # Initialize environment to get state and action sizes
+    env = gym.make(env_name)
+
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+    env_id = env.spec.id
+    env.close()
+
+    if create_actor_func is not None:
+        a_model = create_actor_func(obs_shape, action_size)
+    else:
+        a_model = None
+    if create_critic_func is not None:
+        c_model = create_critic_func(obs_shape)
+    else:
+        c_model = None
+
+    # Initialize global network
+    global_network = A2CAgent(obs_shape, action_size,
+                              a_model=a_model, c_model=c_model)
+
+    # Create a queue to share weights between processes
+    manager = multiprocessing.Manager()
+    global_weights_queue = manager.Queue(maxsize=2*N_WORKERS)
+    gradients_queue = manager.Queue(maxsize=2*N_WORKERS)
+    save_request_queue = manager.Queue(maxsize=N_WORKERS)
+    save_lock = manager.Lock()
+
+    # initial weights for the global network
+    for _ in range(2*N_WORKERS):
+        # Initialize queue with the global network's weights
+        global_weights_queue.put(global_network.get_weights())
+
+
+    # Create and start worker processes
+    processes = []
+    for i in range(N_WORKERS):
+        p = multiprocessing.Process(
+            target=worker,
+            args=(i, global_weights_queue, gradients_queue,
+                  save_request_queue, env_id,
+                  create_actor_func, create_critic_func,
+                  max_episodes,
+                  max_score, min_score, max_steps, wandb_log)
+        )
+        p.start()
+        processes.append(p)
+        print(f'Started worker {p.name}')
+
+    try:
+        last_refill_time = time.time()
+        best_reward = -np.inf
+        while(any(p.is_alive() for p in processes)):
+            gradients = []
+            for _ in range(N_WORKERS):
+                if not gradients_queue.empty():
+                    gradients.append(gradients_queue.get())
+
+            if gradients: # process gradients if available
+                # Filter out None gradients
+                valid_gradients = [
+                    (actor_grads, critic_grads)
+                    for actor_grads, critic_grads in gradients
+                    if actor_grads is not None and critic_grads is not None
+                ]
+                # Only proceed if there are valid gradients
+                if valid_gradients:
+                    actor_grads_avg = []
+                    critic_grads_avg = []
+                    for actor_grads, critic_grads in valid_gradients:
+                        if not actor_grads_avg:
+                            actor_grads_avg = [tf.convert_to_tensor(g)\
+                                    for g in actor_grads]
+                            critic_grads_avg = [tf.convert_to_tensor(g)\
+                                    for g in critic_grads]
+                        else:
+                            for i, g in enumerate(actor_grads):
+                                actor_grads_avg[i] = tf.add(
+                                    actor_grads_avg[i], tf.convert_to_tensor(g))
+                            for i, g in enumerate(critic_grads):
+                                critic_grads_avg[i] = tf.add(
+                                    critic_grads_avg[i], tf.convert_to_tensor(g))
+
+                    n = len(valid_gradients)
+                    actor_grads_avg = [tf.math.truediv(g, n) \
+                                       for g in actor_grads_avg]
+                    critic_grads_avg = [tf.math.truediv(g, n) \
+                                       for g in critic_grads_avg]
+
+                    global_network.apply_gradients(actor_grads_avg,
+                                                critic_grads_avg)
+
+                # Synchronize global weights with all workers
+                updated_weights = global_network.get_weights()
+                for _ in range(N_WORKERS):
+                    try:
+                        # Synchronize global weights with all workers
+                        global_weights_queue.put_nowait(updated_weights)
+                    except queue.Full: # skip synchronization
+                        while not global_weights_queue.empty():
+                            try:
+                                global_weights_queue.get_nowait()
+                            except queue.Empty:
+                                break
+                        global_weights_queue.put_nowait(updated_weights)
+
+            # periodically refill the global weights queue
+            if time.time() - last_refill_time > 5:
+                try:
+                    global_weights_queue.put_nowait(
+                              global_network.get_weights())
+                    last_refill_time = time.time()
+                except queue.Full: # skip refill
+                    continue
+
+            # saving weights
+            while not save_request_queue.empty():
+                try:
+                    worker_id, episode, episode_reward = \
+                              save_request_queue.get_nowait()
+                    print(f"Worker: {worker_id},\
+                           episode: {episode},  \
+                           reward: {episode_reward:.2f}")
+                    if episode_reward > best_reward:
+                        best_reward = episode_reward
+                        with save_lock:
+                            try:
+                                global_network.save_weights(
+                                    actor_wt_file='a3c_actor.weights.h5',
+                                    critic_wt_file='a3c_critic.weights.h5',
+                                )
+                                print(f"Best Score: {best_reward}. \
+                                                Saved weights!")
+                            except Exception as e:
+                                print(f"Error saving weights: {e}")
+                except queue.Empty:
+                    break
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        print("Shutting down workers...")
+        #Wait for all processes to complete
+        for p in processes:
+            p.join()
+            print(f'Worker {p.name} has finished.')
+=>PYTHONTEX#PYGpython#default#defaultverb#62#verbatim###frame=single, indent=L#chap07.tex#1217#
+class A2CAgent:
+    def compute_gradients(self, states, actions, rewards):
+        states, actions, discnt_rewards = \
+            self.compute_discounted_rewards(states, actions, rewards)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            td_error = tf.math.subtract(discnt_rewards, values)
+            actor_loss = self.compute_actor_loss(states,\
+                                       actions, td_error)
+            critic_loss = tf.reduce_mean(tf.square(td_error))
+
+        # compute gradients
+        actor_grads = tape1.gradient(actor_loss,
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss,
+                     self.critic.model.trainable_variables)
+
+        # clip gradients
+        actor_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \
+                  if grad is not None else None for grad in actor_grads ]
+        critic_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \
+                  if grad is not None else None for grad in critic_grads]
+
+        # Check for NaN gradients
+        actor_has_nan = any(tf.reduce_any(tf.math.is_nan(grad)) \
+                        for grad in actor_grads if grad is not None)
+        critic_has_nan = any(tf.reduce_any(tf.math.is_nan(grad)) \
+                        for grad in critic_grads if grad is not None)
+
+
+        if actor_has_nan or critic_has_nan:
+            print(f"NaN gradients detected! "
+                  f"Actor NaN: {actor_has_nan}, \
+                           Critic NaN: {critic_has_nan}, "
+            # Skip sending gradients to avoid corrupting global network
+            return None, None, None, None
+
+        return actor_loss.numpy(), critic_loss.numpy(), \
+               actor_grads, critic_grads
+
+    def apply_gradients(self, actor_grads, critic_grads):
+        self.actor.optimizer.apply_gradients(
+            zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(
+            zip(critic_grads, self.critic.model.trainable_variables))
+
+    def get_weights(self):
+        return self.actor.model.get_weights(), \
+                     self.critic.model.get_weights()
+
+    def set_weights(self, actor_weights, critic_weights):
+        self.actor.model.set_weights(actor_weights)
+        self.critic.model.set_weights(critic_weights)
+=>PYTHONTEX#PYGpython#default#defaultverb#63#verbatim###frame=single, indent=L#chap07.tex#1291#
+from a3c import run_workers
+import multiprocessing
+import tensorflow as tf
+
+# create actor & Critic models
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
+
+if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
+    run_workers(
+        env_name='LunarLander-v3',
+        max_num_workers=20,
+        max_episodes=1500,
+        max_score=500,
+        min_score=-200,
+        max_steps=1000,
+        create_actor_func=create_actor_model,
+        create_critic_func=create_critic_model,
+    )
+
+=>PYTHONTEX#PYGpython#default#defaultverb#64#verbatim###frame=single, indent=L#chap08.tex#233#
+class Actor():
+    def __init__(self, obs_shape, action_shape,
+                 learning_rate=0.0001,
+                 action_upper_bound=1.0,
+                model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_shape[0]
+        self.lr = learning_rate
+        self.max_action = action_upper_bound
+
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
+
+        # Constraints for log_std to ensure numerical stability
+        # and reasonable exploration
+        # log_std values are usually clipped to a range like [-20, 2]
+        self.max_log_std = tf.constant(2.0, dtype=tf.float32)
+        self.min_log_std = tf.constant(-20.0, dtype=tf.float32)
+
+    def _build_model(self):
+        x = tf.keras.layers.Input(shape=self.obs_shape)
+        f = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(x)
+        f = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        mu = tf.keras.layers.Dense(self.action_size, activation=None,
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        log_std = tf.keras.layers.Dense(self.action_size, activation=None,
+                kernel_initializer=tf.keras.initializers.HeUniform())(f)
+        model = tf.keras.models.Model(inputs=x,
+               outputs=[mu, log_std], name='actor')
+        model.summary()
+        return model
+
+    def __call__(self, states):
+        mean, log_std = self.model(states)
+        log_std = tf.clip_by_value(log_std, self.min_log_std,
+                                       self.max_log_std)
+        return mean, log_std
+
+    def sample_action(self, state, reparameterize=False):
+        mean, log_std = self(state)
+        std = tf.exp(log_std)
+        dist = tfp.distributions.Normal(mean, std)
+
+        if reparameterize: # Reparameterization trick
+            z = mean + std * tf.random.normal(tf.shape(mean))
+        else:
+            z = dist.sample()
+
+        action = tf.tanh(z) * self.max_action
+        squash = 1 - tf.math.pow(tf.tanh(z), 2) # squash values to (0,1)
+        squash = tf.clip_by_value(squash, 1e-6, 1.0)  # Avoid division by zero
+        log_prob = dist.log_prob(z)
+        log_prob -= tf.math.log(squash)
+        log_prob = tf.math.reduce_sum(log_prob,  axis=-1, keepdims=True)
+        return action, log_prob
+=>PYTHONTEX#PYGpython#default#defaultverb#65#verbatim###frame=single, indent=L#chap08.tex#306#
+class Critic:
+    """ Approximates Q(s,a) function """
+    def __init__(self, obs_shape, action_shape,
+                 learning_rate=1e-3,
+                 model=None):
+        self.obs_shape = obs_shape    # shape: (m,)
+        self.action_shape = action_shape  # shape: (n, )
+        self.lr = learning_rate
+        # create NN model
+        if model is None:
+            self.model = self._build_net()
+        else:
+            self.model = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(self.lr)
+
+    def _build_net(self):
+        state_input = tf.keras.layers.Input(shape=self.obs_shape)
+        action_input = tf.keras.layers.Input(shape=self.action_shape)
+        concat = tf.keras.layers.Concatenate()([state_input, action_input])
+        out = tf.keras.layers.Dense(256, activation='relu',
+           kernel_initializer=tf.keras.initializers.HeUniform())(concat)
+        out = tf.keras.layers.Dense(256, activation='relu',
+           kernel_initializer=tf.keras.initializers.HeUniform())(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+           kernel_initializer=tf.keras.initializers.HeUniform())(out)
+        net_out = tf.keras.layers.Dense(1)(out)
+        model = tf.keras.Model(inputs=[state_input, action_input],
+            outputs=net_out, name='critic')
+        model.summary()
+        return model
+
+    def __call__(self, states, actions):
+        """ Returns Q(s,a) value """
+        return self.model([states, actions])
+
+=>PYTHONTEX#PYGpython#default#defaultverb#66#verbatim###frame=single, indent=L#chap08.tex#366#
+class SACAgent:
+    def __init__(self, obs_shape, action_shape,
+                 lr_a=1e-4, lr_c=3e-4,
+                 lr_alpha=3e-4, alpha=0.2,
+                 gamma=0.99, polyak=0.999,
+                 action_upper_bound=1.0,
+                 buffer_size=1000000,
+                 batch_size=256,
+                 reward_scale=1.0,
+                 max_grad_norm=None, # required for gradient clipping
+                 actor_model=None,
+                 critic_model=None ):
+
+        self.obs_shape = obs_shape
+        self.action_shape = action_shape
+        self.gamma = gamma  # Discount factor
+        self.polyak = polyak # Polyak averaging coefficient
+        self.batch_size = batch_size
+        self.buffer_size = buffer_size
+        self.actor_lr = lr_a
+        self.critic_lr = lr_c
+        self.alpha_lr = lr_alpha
+        self.reward_scale = reward_scale
+        self.max_grad_norm = max_grad_norm
+        self.name = 'SAC'
+
+        # Initialize actor and critic networks
+        self.actor = Actor(obs_shape, action_shape, self.actor_lr,
+                           action_upper_bound, model=actor_model)
+        self.critic_1 = Critic(obs_shape, action_shape, self.critic_lr,
+                                                   model=critic_model)
+        self.critic_2 = Critic(obs_shape, action_shape, self.critic_lr,
+                                                model=critic_model)
+
+        # Target networks for soft updates
+        self.target_critic_1 = Critic(obs_shape, action_shape,
+                           self.critic_lr, model=critic_model)
+        self.target_critic_2 = Critic(obs_shape, action_shape,
+                           self.critic_lr, model=critic_model)
+
+        # make alpha a trainable variable
+        self.log_alpha = tf.Variable(tf.math.log(alpha),
+            dtype=tf.float32, trainable=True, name='log_alpha')
+        self.alpha_optimizer = tf.keras.optimizers.Adam(
+                                 learning_rate=self.alpha_lr)
+
+        # Target entropy for action space
+        self.target_entropy = tf.constant(-np.prod(self.action_shape),
+                                                   dtype=tf.float32)
+
+        # Replay buffer
+        self.buffer = ReplayBuffer(self.buffer_size)
+
+        # Initialize target networks with the same weights as the main networks
+        self.target_critic_1.model.set_weights(
+                     self.critic_1.model.get_weights())
+        self.target_critic_2.model.set_weights(
+                     self.critic_2.model.get_weights())
+
+    def update_target_networks(self):
+        """
+        Soft update target networks using Polyak averaging
+        """
+        for target_var, var in zip(self.target_critic_1.model.trainable_variables,
+                                self.critic_1.model.trainable_variables):
+            target_var.assign(self.polyak * target_var + (1 - self.polyak) * var)
+
+        for target_var, var in zip(self.target_critic_2.model.trainable_variables,
+                                self.critic_2.model.trainable_variables):
+            target_var.assign(self.polyak * target_var + (1 - self.polyak) * var)
+
+    def choose_action(self, state, evaluate=False):
+        """
+        Choose an action based on the current state
+        """
+        state = tf.expand_dims(tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
+        action, _ = self.actor.sample_action(state, reparameterize=not evaluate)
+        action = tf.squeeze(action, axis=0)  # Remove batch dimension
+        return action.numpy()
+
+    def store_transition(self, state, action, reward, next_state, done):
+        """
+        Store a transition in the replay buffer
+        : inputs are numpy arrays
+        """
+        self.buffer.add((state, action, reward, next_state, done))
+
+    def update_critic(self, states, actions, rewards, next_states, dones):
+        """
+        Update the critic networks using the sampled transitions
+        : inputs are tensors
+        """
+
+        with tf.GradientTape(persistent=True) as tape:
+            # predict next_actions and log_probs for next states
+            next_actions, next_log_probs = self.actor.sample_action(next_states)
+
+            # compute target Q-values using the target critic networks
+            target_q1 = self.target_critic_1(next_states, next_actions)
+            target_q2 = self.target_critic_2(next_states, next_actions)
+            min_target_q_next = tf.minimum(target_q1, target_q2)
+
+            # Soft Bellman backup equation for target Q-value
+            # y = r + gamma * (1 - done) * (min_Q_target(s', a') - alpha * log_pi(a'|s'))
+            target_q_values = self.reward_scale * rewards + \
+                  self.gamma * (tf.ones_like(dones) - dones) * \
+                  (min_target_q_next - tf.exp(self.log_alpha) * next_log_probs)
+
+            # compute current Q-values
+            current_q1 = self.critic_1(states, actions)
+            current_q2 = self.critic_2(states, actions)
+
+            # compute critic losses
+            critic_1_loss = tf.reduce_mean(tf.square(current_q1 - target_q_values))
+            critic_2_loss = tf.reduce_mean(tf.square(current_q2 - target_q_values))
+
+        # compute gradients for critic networks
+        critic_1_grads = tape.gradient(critic_1_loss, self.critic_1.model.trainable_variables)
+        critic_2_grads = tape.gradient(critic_2_loss, self.critic_2.model.trainable_variables)
+
+        if self.max_grad_norm is not None:
+            # Clip gradients to avoid exploding gradients
+            critic_1_grads, _ = tf.clip_by_global_norm(critic_1_grads, self.max_grad_norm)
+            critic_2_grads, _ = tf.clip_by_global_norm(critic_2_grads, self.max_grad_norm)
+
+        # apply gradients to the critic networks if gradients are not None
+        if critic_1_grads is not None:
+            self.critic_1.optimizer.apply_gradients(zip(critic_1_grads,
+                                            self.critic_1.model.trainable_variables))
+        if critic_2_grads is not None:
+            self.critic_2.optimizer.apply_gradients(zip(critic_2_grads,
+                                            self.critic_2.model.trainable_variables))
+
+        mean_c_loss = (critic_1_loss + critic_2_loss) / 2.0
+        return mean_c_loss
+
+    def update_actor(self, states):
+        """
+        Update the actor network
+        inputs are tensors
+        outputs: actor_loss and alpha_loss
+        """
+
+        with tf.GradientTape(persistent=True) as tape:
+            # Sample actions and log probabilities for current states
+            new_actions, log_probs = self.actor.sample_action(states)
+
+            # Compute Q-values for the sampled actions
+            q1_new = self.critic_1(states, new_actions)
+            q2_new = self.critic_2(states, new_actions)
+            min_q = tf.minimum(q1_new, q2_new)
+
+            # Actor loss is the mean of the Q-values minus the entropy term
+            # Actor loss (maximize soft Q-value, incorporating entropy)
+            # J_pi = E_s,a~pi [alpha * log_pi(a|s) - Q(s,a)] -> minimize -J_pi
+            actor_loss = tf.reduce_mean(tf.exp(self.log_alpha) * log_probs - min_q)
+
+            # alpha loss is computed as the mean of the target entropy minus the log probability
+            alpha_loss = tf.reduce_mean(tf.negative(self.log_alpha) * \
+                                          (log_probs + self.target_entropy))
+
+        # Compute gradients for the actor network
+        actor_grads = tape.gradient(actor_loss, self.actor.model.trainable_variables)
+        # Compute gradients for alpha
+        alpha_grads = tape.gradient(alpha_loss, [self.log_alpha])
+
+        if self.max_grad_norm is not None:
+            # Clip gradients to avoid exploding gradients
+            actor_grads, _ = tf.clip_by_global_norm(actor_grads, self.max_grad_norm)
+            alpha_grads, _ = tf.clip_by_global_norm(alpha_grads, self.max_grad_norm)
+
+        # Apply gradients to the actor network if gradients are not None
+        if actor_grads is not None:
+            self.actor.optimizer.apply_gradients(zip(actor_grads,
+                                            self.actor.model.trainable_variables))
+
+        # Apply gradients to alpha if gradients are not None
+        if alpha_grads is not None:
+            self.alpha_optimizer.apply_gradients(zip(alpha_grads, [self.log_alpha]))
+        return actor_loss, alpha_loss
+
+    def train(self, update_per_step=1):
+        if len(self.buffer) < self.batch_size:
+            return 0, 0, 0
+
+        c_losses, a_losses, alpha_losses = [], [], []
+        for _ in range(update_per_step):
+
+            # Sample a batch of transitions from the replay buffer
+            states, actions, rewards, next_states, dones = \
+                  self.buffer.sample_unpacked(self.obs_shape, self.action_shape, self.batch_size)
+
+            states = tf.convert_to_tensor(states, dtype=tf.float32)
+            actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+            rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+            next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+            dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+
+            # Update Critic networks
+            critic_loss = self.update_critic(states, actions, rewards, next_states, dones)
+            actor_loss, alpha_loss = self.update_actor(states)
+
+            # Update target networks
+            self.update_target_networks()
+
+            c_losses.append(critic_loss)
+            a_losses.append(actor_loss)
+            alpha_losses.append(alpha_loss)
+        mean_critic_loss = tf.reduce_mean(c_losses)
+        mean_actor_loss = tf.reduce_mean(a_losses)
+        mean_alpha_loss = tf.reduce_mean(alpha_losses)
+        return mean_critic_loss, mean_actor_loss, mean_alpha_loss
+=>PYTHONTEX#PYGpython#default#defaultverb#67#verbatim###frame=single, indent=L#chap08.tex#594#
+    def sample_unpacked(self, obs_shape, action_shape, batch_size=24):
+        """ Returns a batch of experiences as a tuple of numpy arrays.
+        Input:
+            batch_size: int
+            obs_shape: tuple, shape of the observation space
+        returns: (states, actions, rewards, next_states, dones) """
+
+        mini_batch = self.sample(batch_size)
+        assert len(mini_batch[0]) == 5, "Each experience tuple must have 5 elements: (s,a,r,s',d)"
+        states = np.zeros((batch_size, *obs_shape))
+        next_states = np.zeros((batch_size, *obs_shape))
+        actions = np.zeros((batch_size, *action_shape))
+        rewards = np.zeros((batch_size, 1))
+        dones = np.zeros((batch_size, 1))
+
+        for i in range(len(mini_batch)):
+            states[i] = mini_batch[i][0]
+            actions[i] = mini_batch[i][1]
+            rewards[i] = mini_batch[i][2]
+            next_states[i] = mini_batch[i][3]
+            dones[i]  = mini_batch[i][4]
+        return states, actions, rewards, next_states, dones
+=>PYTHONTEX#PYGpython#default#defaultverb#68#verbatim###frame=single, indent=L#chap08.tex#634#
+class ValueNetwork():
+    """  Approximates V(s) function   """
+    def __init__(self, obs_shape,
+                 learning_rate=1e-3,
+                 model=None):
+        self.obs_shape = obs_shape
+        self.lr = learning_rate
+        # create NN model
+        if model is None:
+            self.model = self._build_net()
+        else:
+            self.model = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(self.lr)
+
+    def _build_net(self):
+        inp = tf.keras.layers.Input(shape=self.obs_shape)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(inp)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
+        out = tf.keras.layers.Dense(256, activation='relu',
+                kernel_initializer=tf.keras.initializers.HeUniform())(out)
+        net_out = tf.keras.layers.Dense(1)(out)
+        model = tf.keras.Model(inputs=inp, outputs=net_out, name='value_network')
+        model.summary()
+        return model
+
+    def __call__(self, states):
+        """ Returns V(s) value  """
+        v = self.model(states)
+        return v
+=>PYTHONTEX#PYGpython#default#defaultverb#69#verbatim###frame=single, indent=L#chap08.tex#683#
+class SACAgent:
+    """  Soft Actor-Critic Agent """
+    def __init__(self, obs_shape, action_shape,
+               action_upper_bound=1.0, <other args ...>):
+        self.obs_shape = obs_shape
+        self.action_shape = action_shape
+        self.action_size = action_shape[0]
+        self.action_upper_bound = action_upper_bound
+        self.batch_size = batch_size
+        self.name = 'SAC2'
+        self.target_entropy = -np.prod(action_shape)  # Target entropy = -|A|
+        <snip>
+
+        # Initialize networks
+        self.actor = Actor(obs_shape, action_shape, lr_a,
+                                 action_upper_bound, model=actor_model)
+        self.critic_1 = Critic(obs_shape, action_shape,
+                                 learning_rate=self.actor_lr, model=critic_model)
+        self.critic_2 = Critic(obs_shape, action_shape,
+                                 learning_rate=self.critic_lr, model=critic_model)
+        self.value_network = ValueNetwork(obs_shape,
+                                 learning_rate=self.critic_lr, model = value_model)
+
+        # create a replay buffer
+        self.buffer = ReplayBuffer(self.buffer_size)
+
+        # Target networks for stability
+        self.target_value_network = ValueNetwork(obs_shape, learning_rate=self.critic_lr)
+        self.target_value_network.model.set_weights(self.value_network.model.get_weights())
+
+        # Initialize alpha (temperature parameter)
+        self.log_alpha = tf.Variable(tf.math.log(alpha), trainable=True, dtype=tf.float32)
+        self.alpha_optimizer = tf.keras.optimizers.Adam(learning_rate=self.alpha_lr)
+
+
+    def choose_action(self, state, evaluate=False):
+        """ same as before """
+        pass
+
+    def store_transition(self, state, action, reward, next_state, done):
+        """ same as before """
+        pass
+
+    def update_target_networks(self):
+        """ Update only target value network using Polyak averaging   """
+        for target_var, var in zip(self.target_value_network.model.trainable_variables,
+                                   self.value_network.model.trainable_variables):
+            target_var.assign(self.polyak * target_var + (1 - self.polyak) * var)
+
+    def update_value_network(self, states, next_states):
+        with tf.GradientTape() as tape:
+            next_actions, next_log_probs = self.actor.sample_action(next_states)
+            next_q1 = self.critic_1(next_states, next_actions)
+            next_q2 = self.critic_2(next_states, next_actions)
+            next_q = tf.minimum(next_q1, next_q2)
+            value_target = next_q - tf.exp(self.log_alpha) * next_log_probs
+            value = self.value_network(states)
+            value_loss = tf.reduce_mean(tf.square(value - value_target))
+
+        value_grads = tape.gradient(value_loss, self.value_network.model.trainable_variables)
+
+        if self.max_grad_norm is not None:
+            value_grads, _ = tf.clip_by_global_norm(value_grads, self.max_grad_norm)
+
+        if value_grads is not None:
+            # Apply gradients to the value network
+            self.value_network.optimizer.apply_gradients(zip(value_grads, \
+                                            self.value_network.model.trainable_variables))
+        return value_loss
+
+    def update_critic(self, states, actions, rewards, next_states, dones):
+        with tf.GradientTape(persistent=True) as tape:
+            q1 = self.critic_1(states, actions)
+            q2 = self.critic_2(states, actions)
+            next_v = self.target_value_network(next_states)
+            target_q = self.reward_scale * rewards + self.gamma * (1 - dones) * next_v
+            critic_1_loss = tf.reduce_mean(tf.square(target_q - q1))
+            critic_2_loss = tf.reduce_mean(tf.square(target_q - q2))
+
+        critic_1_grads = tape.gradient(critic_1_loss, self.critic_1.model.trainable_variables)
+        critic_2_grads = tape.gradient(critic_2_loss, self.critic_2.model.trainable_variables)
+
+        if self.max_grad_norm is not None:
+            critic_1_grads, _ = tf.clip_by_global_norm(critic_1_grads, self.max_grad_norm)
+            critic_2_grads, _ = tf.clip_by_global_norm(critic_2_grads, self.max_grad_norm)
+
+        if critic_1_grads is not None:
+            self.critic_1.optimizer.apply_gradients(zip(critic_1_grads, \
+                                            self.critic_1.model.trainable_variables))
+        if critic_2_grads is not None:
+            self.critic_2.optimizer.apply_gradients(zip(critic_2_grads, \
+                                            self.critic_2.model.trainable_variables))
+        return critic_1_loss, critic_2_loss
+
+    def update_actor(self, states):
+        """ same as before """
+        pass
+
+    def train(self):
+        """
+        Train the agent using a batch of transitions from the replay buffer
+        """
+
+        if len(self.buffer) < self.batch_size:
+            return 0, 0, 0, 0
+
+        # Sample a batch of transitions from the replay buffer
+        states, actions, rewards, next_states, dones = \
+               self.buffer.sample_unpacked(self.obs_shape,
+                           self.action_shape, self.batch_size)
+        # Convert to tensors
+        states = tf.convert_to_tensor(states, dtype=tf.float32)
+        actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+
+        # Update value network
+        value_loss = self.update_value_network(states, next_states)
+
+        # Update critic networks
+        critic_1_loss, critic_2_loss = self.update_critic(states, actions,
+                                             rewards, next_states, dones)
+
+        critic_loss = (critic_1_loss + critic_2_loss)/2.0
+
+        # Update actor network
+        actor_loss, alpha_loss = self.update_actor(states)
+
+        # Update target networks
+        self.update_target_networks()
+        return value_loss, critic_loss, actor_loss, alpha_loss
+=>PYTHONTEX#PYGpython#default#defaultverb#70#verbatim###frame=single, indent=L#chap08.tex#830#
+def train_sac_agent(env, agent, num_episodes=1500,
+                    stop_score=-200,
+                    warmup_steps=1000,
+                    update_per_step=1,
+                    log_freq=100):
+
+    print('Environment name: ', env.spec.id)
+    print('RL Agent name:', agent.name)
+
+    ep_scores = []
+    best_score = -np.inf
+    total_steps = 0
+    a_loss, c_loss, alpha_loss = 0, 0, 0
+    if SAC2:
+        v_loss = 0
+    for e in range(num_episodes):
+        done = False
+        truncated = False
+        state = env.reset()[0]
+        ep_score = 0
+        ep_steps = 0
+        c_losses, a_losses, alpha_losses = [], [], []
+        if SAC2:
+            v_losses = []
+        while not done and not truncated:
+
+            if total_steps < warmup_steps:
+                action = env.action_space.sample()
+            else:
+                # Use the agent's policy to select an action
+                action = agent.choose_action(state)
+
+            next_state, reward, done, truncated, _ = env.step(action)
+            agent.store_transition(state, action, reward, next_state, done)
+
+            state = next_state
+            ep_score += reward
+            ep_steps += 1
+            total_steps += 1
+
+            # train the agent
+            if total_steps >= warmup_steps:
+                c_l, a_l, ap_l = agent.train(update_per_step=update_per_step)
+                c_losses.append(c_l)
+                a_losses.append(a_l)
+                alpha_losses.append(ap_l)
+        # while loop ends here - end of episode
+        ep_scores.append(ep_score)
+        c_loss = np.mean(c_losses)
+        a_loss = np.mean(a_losses)
+        alpha_loss = np.mean(alpha_losses)
+
+        if e % log_freq == 0:
+            print(f'e:{e}, ep_score:{ep_score:.2f}, avg_ep_score:{np.mean(ep_scores):.2f},\
+            avg100score:{np.mean(ep_scores[-100:]):.2f}, \
+                best_score:{best_score:.2f}')
+
+        if ep_score > best_score:
+            best_score = ep_score
+            agent.save_weights(filename='ll_sac.weights.h5')
+            print(f'Best Score: {ep_score:.2f}, episode: {e}. Model saved.')
+
+        if np.mean(ep_scores[-100:]) > stop_score:
+            print('The problem is solved in {} episodes'.format(e))
+            break
+    # for loop ends here
+=>PYTHONTEX#PYGpython#default#defaultverb#71#verbatim###frame=single, indent=L#chap08.tex#912#
+import gymnasium as gym
+from sac import SACAgent
+if __name__ == "__main__":
+    # Create the gym environment
+    env = gym.make('Pendulum-v1', g=9.81)
+
+    obs_shape = env.observation_space.shape
+    action_shape = env.action_space.shape
+    print(f"Observation shape: {obs_shape}, Action shape: {action_shape}")
+    action_upper_bound = env.action_space.high[0]  # Assuming continuous action space
+    print(f"Action upper bound: {action_upper_bound}")
+    print(f"Action lower bound: {env.action_space.low}")
+
+    # Initialize the SAC agent
+    agent = SACAgent(obs_shape, action_shape,
+                     action_upper_bound=action_upper_bound,
+                     reward_scale=1.0,
+                     buffer_size=1000000,
+                     batch_size=256,
+                     max_grad_norm=None)
+
+
+    # train the agent
+    train_sac_agent(env, agent, num_episodes=1500,
+                    stop_score=-200)
+
+=>PYTHONTEX#PYGpython#default#defaultverb#72#verbatim###frame=single, indent=L#chap08.tex#1009#
+import gymnasium as gym
+from sac2 import SACAgent
+if __name__ == "__main__":
+    # Create the LunarLanderContinuous-v3 environment
+    env = gym.make('LunarLander-v3', continuous=True)
+
+    obs_shape = env.observation_space.shape
+    action_shape = env.action_space.shape
+    print(f"Observation shape: {obs_shape}, Action shape: {action_shape}")
+    action_upper_bound = env.action_space.high  # Assuming continuous action space
+    print(f"Action upper bound: {action_upper_bound}")
+    print(f"Action lower bound: {env.action_space.low}")
+
+    # Initialize the SAC agent
+    agent = SACAgent(obs_shape, action_shape,
+                 buffer_size=1000000,
+                 batch_size=256,
+                 action_upper_bound=action_upper_bound,
+                 reward_scale=1.0,
+                 lr_a=0.001, lr_c=1e-4, lr_alpha=1e-4,
+                 polyak=0.995)
+
+    # train the agent
+    train_sac_agent(env, agent, num_episodes=1500,
+                    max_score=500, min_score=-300,
+                    stop_score=200,
+                    update_per_step=1,
+                    wandb_log=True)
+
+=>PYTHONTEX#PYGpython#default#defaultverb#73#verbatim###frame=single, indent=L#chap08.tex#1128#
+import gymnasium as gym
+from sac2 import SACAgent
+if __name__ == "__main__":
+
+    # Create the LunarLanderContinuous-v3 environment
+    env = gym.make('FetchReachDense-v3',
+            max_episode_steps=100, render_mode='rgb_array')
+
+    obs_shape = env.observation_space['observation'].shape
+    action_shape = env.action_space.shape
+    print(f"Observation shape: {obs_shape}, Action shape: {action_shape}")
+    action_upper_bound = env.action_space.high
+    print(f"Action upper bound: {action_upper_bound}")
+    print(f"Action lower bound: {env.action_space.low}")
+
+    # Initialize the SAC agent
+    agent = SACAgent(obs_shape, action_shape,
+                    action_upper_bound=action_upper_bound,
+                    reward_scale=2.0,
+                    buffer_size=1000000,
+                    batch_size=256, )
+
+    # train the agent
+    train_sac_agent(env, agent, num_episodes=1500,
+                    max_score=None, min_score=None,
+                    stop_score=0,
+                    ep_max_steps=None,
+                    update_per_step=1)
+=>PYTHONTEX:SETTINGS#
+version=0.18
+outputdir=pythontex-files-main
+workingdir=.
+workingdirset=false
+gobble=none
+rerun=default
+hashdependencies=default
+makestderr=false
+stderrfilename=full
+keeptemps=none
+pyfuture=default
+pyconfuture=none
+pygments=true
+pygglobal=:GLOBAL||
+fvextfile=-1
+pyconbanner=none
+pyconfilename=stdin
+depythontex=false
+pygfamily=py|python3|
+pygfamily=pycon|pycon|
+pygfamily=sympy|python3|
+pygfamily=sympycon|pycon|
+pygfamily=pylab|python3|
+pygfamily=pylabcon|pycon|
+pygfamily=PYGpython|python|

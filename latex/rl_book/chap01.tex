@@ -1,0 +1,275 @@
+\chapter{Introduction to Reinforcement Learning}
+
+
+\section{What is Reinforcement Learning?} \label{sec:whatis}
+
+\gls{rl} \cite{sutton2018reinforcement} is a
+type of machine learning algorithm in which an agent learns to behave
+in an environment by trial and error. The agent receives rewards for
+taking actions that lead to desired outcomes, and penalties for taking
+actions that lead to undesired outcomes. Over time, the agent learns
+to take actions that maximize its expected reward.
+
+RL is a powerful tool for learning complex behaviors in a variety of
+environments. It has been used to train agents to play games, control
+robots, and make financial decisions.
+
+\section{Reinforcement Learning Problem} \label{sec:rlprob}
+
+
+\subsection{The Components of a Reinforcement Learning System}
+\label{sec:rlcomp}
+
+The reinforcement learning framework consists of three main components:
+
+\begin{description}
+\item [The agent:] The agent is the entity that learns to behave in
+the environment. It can be a physical robot, a software program, or
+even a human being.
+
+\item[The environment:] The environment is the world in which the
+agent lives and acts. It can be physical, such as a game board or a
+robotic arm, or it can be virtual, such as a computer simulation.
+
+\item[The reward signal:] The reward signal is a measure of how well
+the agent is doing. It is typically given to the agent after it takes
+an action.
+\end{description}
+
+The agent interacts with the environment by taking actions and
+receiving rewards. The goal of the agent is to learn a policy, which
+is a mapping from states to actions. The policy tells the agent what
+action to take in each state in order to maximize its expected reward.
+
+\subsection{Problem Formulation}
+The reinforcement learning problem can be formulated as a \gls{mdp}.
+An MDP is a probabilistic decision-making model (\emph{Markov Chain}
+\cite{norris1998markov}) that solely depends on the current state to
+predict the next state and not the previous states. In this case, the
+MDP is represented as a tuple $(S,A,P,R, \gamma)$, where:
+
+\begin{itemize}
+  \item $S$ is a set of states. Each state represents the condition of
+    the environment at a given time $t$. It is a vector of variables
+    that fully describe the environment at that time.
+
+  \item $A$ is a set of actions. Each action is the agent's choice of
+    what to do in a given state. It could be a scalar variable or a
+    vector that represents the agent's decision.
+
+  \item $P(s |s,a)$ is the probability of transitioning from state $s$
+    to state $s'$ when taking action $a$.
+
+  \item $R(s,a)$ is the reward received from the environment when
+    transitioning from state $s$ to state $s'$ by taking action $a$.
+    It is a measure of how well the agent's action performed. 
+
+  \item $\gamma$ is a discount factor, which represents how much the
+    agent cares about future rewards.
+\end{itemize}
+
+In addition, the RL problem includes the following components:
+
+\begin{itemize}
+  \item \textbf{Policy:} The policy is a mapping from states to
+    actions. It is a function that tells the agent what action to take
+    in a given state. It is denoted by the symbol $\pi(s)$. 
+
+  \item \textbf{Value function:} The value function is a function that
+    maps states to expected rewards. It tells the agent how much
+    reward it can expect to receive from a given state by following a
+    policy $\pi$.
+
+  \item \textbf{Action-Value or Q function:} The \emph{action-value
+    function} of a state-action pair $(s,a)$ under policy $\pi$ is the
+    expected return starting from state $s$, taking action $a$, and
+    then following policy $\pi$ thereafter. It is denoted by
+    $Q^\pi(s,a)$.
+\end{itemize}
+The main components of a RL system is shown in the figure
+\ref{fig:rl_sys_comp}. The goal of the reinforcement learning agent is
+to find a policy that maximizes the expected return, which is the sum
+of all future rewards discounted by $\gamma$. This can be done by
+iteratively updating the value function until it converges to the
+optimal value function. This is accomplished mostly by using the
+following Bellman equations for value function and Q function
+respectively: 
+\begin{equation}
+  V^\pi(s) = \mathbb{E}_\pi[R_t + \gamma V_\pi(S_{t+1}=s')|S_t=s]
+  \label{eq:be_value_fn}
+\end{equation}
+and
+\begin{equation}
+  Q^\pi(s,a) = \mathbb{E}_\pi[R_t + \gamma Q^\pi(S_{t+1}=s',
+  A_{t+1}=a')|S_t=s, A_t=a]
+  \label{eq:be_qfn}
+\end{equation}
+The Bellman equations can be used to iteratively improve the value
+functions and action-value functions. This aspect will be discussed in
+more detail in the next chapter. 
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[scale=0.4]{rl_system.pdf}
+  \caption{Components of a Reinforcement Learning System.
+    $\mathbb{E}_{\pi} (R)$ is the expected future reward under a given
+  policy $\pi$.}
+  \label{fig:rl_sys_comp}
+\end{figure}
+
+\section{Types of Reinforcement Learning}
+
+The reinforcement learning algorithms can be divided into two types
+depending how the model information is used. These are: 
+
+\begin{description}
+\item [Model-based RL:] In model-based RL, the agent learns a model of
+the environment. This model can be used to predict the future
+consequences of actions.
+
+\item [Model-free RL:] In model-free RL, the agent does not learn a
+model of the environment. Instead, it learns a policy directly from
+its experiences.
+
+\end{description}
+
+Model-based RL is typically more efficient than model-free RL, but it
+is also more difficult to learn. Model-free RL is typically less
+efficient than model-based RL, but it is easier to learn.
+
+Similarly, depending on how the optimal policy is learnt, the
+reinforcement learning algorithms could be divided into the following
+two types:
+
+\begin{description}
+
+\item [Value-based:] In this method, the approximate value
+    function, which is a measure of expected reward for a given
+    action, is first learnt and then the optimal policy is derived
+    from this value function.  Q-learning, DQN, DDQN are value-based
+    methods. These methods are more sample efficient (require lesser
+    examples) and are more stable.
+
+\item [Policy-based:] In these methods, the policy function
+    is directly computed from a state without estimating their value.
+    Policy-based methods converge more easily to a local or a global
+    maximum and they do not suffer from oscillation. They are highly
+    effective in high-dimensional or continuous state spaces. They can
+    learn stochastic policies (give a probability distribution over
+    actions). They, however, take longer time to converge. Some
+    examples include DDPG and PPO. (\textcolor{red}{Need to be better
+    explained.})
+\end{description}
+
+The value-based methods that estimate Q function $Q(s,a)$ can further be divided into the following two
+types:
+
+\begin{description}
+  \item[On-policy:] In on-policy algorithms, the Q function $Q(s,a)$
+    is learned from the actions that is generating using the current
+    policy $\pi(a|s)$.
+  \item[Off-policy:] In off-policy learning, the Q function $Q(s,a)$
+    is learned from actions generated using a different policy or no
+    policy at all (for example, random actions).   
+\end{description}
+
+\section{Types of RL Environment}
+
+\section{Reinforcement Learning Algorithms}
+
+There are many different reinforcement learning algorithms. Some of the most popular algorithms include:
+
+\begin{itemize}
+\item Q-learning: Q-learning is a model-free RL algorithm that learns
+a table of Q-values. The Q-value for a state-action pair is the
+expected reward for taking that action in that state.
+
+\item SARSA: SARSA is a model-based RL algorithm that learns a table
+of state-action-reward-state (SARS) values. The SARS value for a
+state-action-reward-state pair is the expected reward for taking that
+action in that state, given that the previous state was the given
+state and the previous reward was the given reward.
+
+\item Deep Q-learning: Deep Q-learning is a variant of Q-learning that
+uses a neural network to represent the Q-values. This allows Deep
+Q-learning to learn more complex policies than traditional Q-learning.
+
+\item Policy gradient methods: Policy gradient methods learn a policy
+directly, without learning a Q-table. Policy gradient methods are
+typically more efficient than Q-learning, but they can be more
+difficult to learn.
+\end{itemize}
+
+\subsection{Applications of Reinforcement Learning}
+
+Reinforcement learning has been used to solve a wide variety of problems, including:
+
+\begin{itemize}
+\item Playing games: Reinforcement learning has been used to train
+agents to play games such as Atari games, Go, and Dota 2.
+
+\item Controlling robots: Reinforcement learning has been used to
+train robots to perform tasks such as walking, grasping, and
+navigation.
+
+\item Making financial decisions: Reinforcement learning has been used
+to make financial decisions such as trading stocks and bonds.
+
+\item Medical diagnosis: Reinforcement learning has been used to
+develop algorithms for medical diagnosis.
+
+\item Natural language processing: Reinforcement learning has been
+used to develop algorithms for natural language processing tasks such
+as machine translation and speech recognition.
+
+\end{itemize}
+
+\section{The history of Reinforcement Learning}
+
+Reinforcement learning (RL) \cite{sutton2018reinforcement} is a
+subfield of machine learning that deals with how agents learn to
+behave in an environment in order to maximize some notion of
+cumulative reward. It is one of three basic machine learning
+paradigms, alongside supervised learning and unsupervised learning.
+
+The origins of reinforcement learning can be traced back to the early
+work of B. F. Skinner in the 1930s. Skinner was a psychologist who
+studied the behavior of animals, and he developed a theory of learning
+called operant conditioning \cite{skinner1971operant}. Operant
+conditioning is based on the idea that animals learn to associate
+certain behaviors with rewards or punishments.
+
+In the 1950s, the first reinforcement learning algorithms were
+developed by computer scientists. One of the most important early
+algorithms was the Q-learning algorithm, which was developed by John
+McCain and Paul Werbos \cite{haney2020applied}. Q-learning is a
+value-based reinforcement learning algorithm that iteratively updates
+a table of state-action values.
+
+In the 1970s and 1980s, reinforcement learning research continued to
+grow, but it was still a relatively niche field. However, in the
+1990s, there was a renewed interest in reinforcement learning, due in
+part to the development of new algorithms and the availability of more
+powerful computers.
+
+In the 2000s, reinforcement learning saw even more progress, due to
+the development of deep reinforcement learning algorithms. Deep
+reinforcement learning algorithms use artificial neural networks to
+represent the state-action values or policies. This allows them to
+learn much more complex tasks than traditional reinforcement learning
+algorithms. Readers can refer to \cite{arulkumaran2017brief}
+\cite{li2017deep} \cite{franccois2018introduction} for more details.
+
+In recent years, reinforcement learning has been used to achieve
+impressive results in a variety of domains, including game playing,
+robotics, and finance. For example, in 2016, the AlphaGo program
+developed by Google DeepMind defeated the world champion Go player,
+Lee Sedol \cite{silver2017mastering}. This was a major breakthrough
+for reinforcement learning, as Go is a very complex game that was
+previously thought to be too difficult for computers to master.
+
+Reinforcement learning is a rapidly growing field, and it is still
+full of challenges. However, the progress that has been made in recent
+years is very promising, and it is likely that reinforcement learning
+will continue to play an increasingly important role in artificial
+intelligence in the years to come.

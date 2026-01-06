@@ -1,0 +1,541 @@
+\chapter{Temporal Difference Learning}\label{chap:tdl}
+\section{Introduction}
+In the previous chapter, we studied about Monte Carlo method that
+can be used for solving the Markov Decision Process (MDP) when the
+environment model is not known. We showed how Monte Carlo methods can be
+used for predicting value functions and finding optimal control
+strategies. One of the limitations of the Monte Carlo methods is that
+they can be applied only to episodic tasks because of their reliance
+on the concept of discounted returns which can only computed for an
+episode with an well-defined end. In this chapter we will talk about
+another model-free learning approach called \emph{Temporal Difference Learning} that can
+be used for solving non-episodic tasks. In this process, we will learn
+two particular TD learning algorithms, namely, Q-learning and SARSA. 
+
+
+\section{TD Learning}
+\index{Temporal Difference (TD) Learning}
+\index{Temporal Difference (TD) Learning!TD Prediction}
+The \gls{td} learning, introduced by Sutton \cite{sutton1988learning}, uses
+\emph{bootstrapping} to estimate the value function wherein the
+current estimates are approximated based on previously learned
+estimates. In this sense, TD learning takes benefit from both Monte
+Carlo methods as well as Dynamic Programming. It  does not require
+model information like The MC method and at the same time, it does not
+wait till the end of the episode to estimate the value function like
+the \gls{dp} algorithm. Bellman's Recursive equation
+\eqref{eq:be_value} is a form of Bootstrapping. The temporal
+difference learning works by updating the current estimate of the
+state value function $V(s)$ with an error value based on the estimate
+of the next state. This is given by the following equation:
+\begin{equation}
+  V(s) = V(s) + \alpha[r + \gamma V(s') - V(s)]
+  \label{eq:td_value}
+\end{equation}
+where $s$ is the current state and $s'$ is the next state and
+$r$ is reward obtained while transitioning from $s$ to $s'$. $\alpha$
+is the learning rate that controls the step size of this incremental
+update and $\gamma$ discount rate that determines how much importance
+is assigned to immediate rewards compared to the future rewards. The
+difference term $(r+\gamma V(s') - V(s))$ is called the \emph{TD
+error} as it is difference between the target value estimate and the
+current value estimate. 
+
+The above equation can be used iteratively to predict value function
+as we did in the case of Monte Carlo methods.  The steps involved in
+the TD-prediction algorithm are as follows:
+\begin{enumerate}
+  \item Initialize $V(s)$ to 0 or some arbitrary values.
+  \item Generate an episode $(s,a,r,s')$ using a policy $\pi$.
+  \item Now update the value function using the TD update rule given
+    by equation \eqref{eq:td_value}.
+  \item Repeat last two steps until convergence.
+\end{enumerate}
+
+We will now use this understanding to learn optimal policy for a given
+problem as discussed in the next section. 
+
+\section{TD Control Algorithms}
+\index{Temporal Difference (TD) Learning!TD Control}
+In this section, we will see how we can optimize the value function to
+learn the optimal control policy. Specifically, we will discuss the
+following two algorithms: (1) an off-policy learning algorithm called Q
+learning and (2) an on-policy learning algorithm called SARSA.
+
+
+\section{Q Learning}\label{sec:ql}
+\index{Temporal Difference (TD) Learning!TD Control!Q-learning}
+Q-learning is a popular \emph{off-policy} TD control algorithm where the
+state-action value or Q function is updated using the following
+equation:
+\begin{equation}
+  Q(s,a) = Q(s,a) + \alpha(r + \gamma \max_{a'}Q(s', a') - Q(s,a))
+  \label{eq:qlearn}
+\end{equation}
+The steps involved in Q learning are as follows:
+\begin{enumerate}
+  \item Initialize Q function to some arbitrary values.
+  \item Derive policy from this Q function using an $\epsilon-$greedy
+    policy.
+  \item Update the Q values by using equation \eqref{eq:qlearn}.
+  \item Repeat the above two steps until we reach the terminal state.
+\end{enumerate}
+
+The Python code for implementing Q learning is provided in the Listing
+\ref{lst:qlearn}. Here, an $\epsilon-$ greedy policy is used as
+the behavioural policy to generate experiences while the Q table is
+updated using action leading to maximum Q value (greedy policy).
+In this sense, this is an \emph{off-policy} learning algorithm. The
+code provides the flexibility to choose between a fixed epsilon value
+or decaying the epsilon value over time through the constructor
+argument \texttt{fixed\_epsilon}. It is also possible to store the
+training values in a file to generate plots afterwards. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+import numpy as np
+import sys 
+import time
+
+class QLearningAgent():
+  def __init__(self, env, alpha=0.3, gamma=0.99, fixed_epsilon=None):
+    self.env = env
+    self.alpha = alpha
+    self.gamma = gamma
+    if fixed_epsilon is None:
+      self.epsilon = 1.0
+      self.eps_min = 0.01
+      self.decay_rate = 0.999
+      self.decay_flag = True 
+    else:
+      self.epsilon = fixed_epsilon
+      self.decay_flag = False
+  
+    print('Environment Name: ', self.env.spec.name)
+    print('RL Agent: ', 'Q-Learning')
+
+    # initialize Q table
+    self.Q = np.zeros((self.env.observation_space.n, 
+                                 self.env.action_space.n))
+
+  def epsilon_greedy_policy(self, state, epsilon):
+    randvar = np.random.uniform(0, 1)
+    if randvar < epsilon:
+      action = self.env.action_space.sample() # explore
+    else:
+      if np.max(self.Q[state]) > 0: 
+        action = np.argmax(self.Q[state]) # exploit
+      else:
+        action = self.env.action_space.sample() # explore
+    return action
+
+
+  def update_q_table(self, s, a, r, s_next):
+    self.Q[s][a] += self.alpha * (r + self.gamma * \
+                         np.max(self.Q[s_next]) - self.Q[s][a])
+  
+  def train(self, num_episodes=1000, filename=None, freq=100):
+    if filename is not None:
+      file = open(filename, "w")
+ 
+    ep_rewards = []
+    start = time.time()
+    for i in range(num_episodes):
+      ep_reward = 0
+      # reset the environment for each episode
+      state = self.env.reset()[0]
+      while True:
+        # select an action
+        action = self.epsilon_greedy_policy(state, self.epsilon)
+        # obtain rewards
+        next_state, reward, done, _, _ = self.env.step(action)
+        # update q table
+        self.update_q_table(state, action, reward, next_state)
+        # accumulate rewards for the episode
+        ep_reward += reward
+        # prepare for next iteration
+        state = next_state
+        if done: # end of episode
+          ep_rewards.append(ep_reward)
+          break
+      #end of while loop
+      if self.decay_flag: # allow epsilon decay
+        self.epsilon = max(self.epsilon * self.decay_rate, self.eps_min)
+
+      if filename is not None:
+        file.write("{}\t{}\n".format(np.mean(ep_rewards), self.epsilon))
+      if i % freq == 0:
+        print('\rEpisode: {}/{}, Average episodic Reward:{:.3f}.'\
+              .format(i, num_episodes, np.mean(ep_rewards)), end="")
+        sys.stdout.flush()
+    #end of for loop
+    end = time.time()
+    print('\nTraining time (seconds): ', (end - start))
+    if filename is not None:
+      file.close()
+
+  def validate(self, num_episodes=10):
+    ep_rewards = []
+    for i in range(num_episodes):
+      state = self.env.reset()[0]
+      ep_reward = 0
+      while True:
+        action = self.epsilon_greedy_policy(state, epsilon=0)
+        next_state, reward, done, _, _ = self.env.step(action)
+        ep_reward += reward
+        state = next_state 
+        if done:
+          ep_rewards.append(ep_reward)
+          break
+    print('\nTest: Average Episodic Reward: ', np.mean(ep_rewards))
+
+  def display_q_table(self):
+    print("\n ------------------ \n")
+    print(self.Q)
+    print("\n ------------------ \n")
+
+  def __delete__(self):
+    self.env.close()
+  \end{pygments}
+  \caption{Python Code for Q Learning Algorithm.}
+  \label{lst:qlearn}
+\end{listing}
+
+The performance of Q learning algorithm in solving the gym's
+\texttt{FrozenLake-v1} and \texttt{Taxi-v3} is shown in the code
+listing \ref{lst:flake_qlearn} and \ref{lst:taxi_qlearn} respectively.
+The Frozen Lake is comparatively a simpler problem compared to the
+taxi problem. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+if __name__ == '__main__':
+    env = gym.make('FrozenLake-v1', is_slippery=False)
+    agent = QLearningAgent(env, alpha=0.1)
+    agent.train(num_episodes=1000, filename='flake_qlearn.tsv', freq=1000)
+    agent.validate()
+  \end{pygments}
+  \begin{framed}
+  \begin{verbatim}
+Environment Name:  FrozenLake
+RL Agent:  Q-Learning
+Episode: 900/1000, Average episodic Reward:0.230.
+Training time (seconds):  0.24520111083984375
+Test: Average Episodic Reward:  1.0
+  \end{verbatim}
+  \end{framed}
+  \caption{Outcome of applying Q Learning to solve the Frozen Lake
+  problem}
+  \label{lst:flake_qlearn}
+\end{listing}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+if __name__ == '__main__':
+    env = gym.make('Taxi-v3', is_slippery=False)
+    agent = QLearningAgent(env, alpha=0.1)
+    agent.train(num_episodes=20000, filename='taxi_qlearn.tsv', freq=1000)
+    agent.validate()
+  \end{pygments}
+  \begin{framed}
+  \begin{verbatim}
+Environment Name:  Taxi
+RL Agent:  Q-Learning
+Episode: 19000/20000, Average episodic Reward:-92.656..
+Training time (seconds):  31.19220733642578
+Test: Average Episodic Reward:  8.1
+  \end{verbatim}
+  \end{framed}
+  \caption{Outcome of applying Q Learning to solve the Frozen Lake
+  problem}
+  \label{lst:taxi_qlearn}
+\end{listing}
+
+\section{SARSA Algorithm}
+SARSA (State-Action-Reward-State-Action) is an \emph{on-policy} TD algorithm.
+In SARSA, the state-action value (Q) function is updated using the
+following equation:
+\begin{equation}
+  Q(s,a) = Q(s,a) + \alpha (r + \gamma Q(s', a') - Q(s,a))
+  \label{eq:sarsa}
+\end{equation}
+where $a'$ is the action selected by the current policy for the next state
+$s'$. 
+
+The steps involved in SARSA algorithm are as follows:
+\begin{enumerate}
+  \item Initialize Q values to some arbitrary values.
+  \item Select $\epsilon-$greedy policy for state transitions.
+  \item Update Q values using equation \eqref{eq:sarsa} where
+    $a'$ is the action selected by the $\epsilon-$greedy policy for
+    the next state $s'$.
+  \item Repeat above three states until the terminal state is reached.
+\end{enumerate}
+
+The SARSA algorithm uses the same $\epsilon-$greedy policy both for
+generating its current experiences (behaviour policy) and for updating
+Q table (learning target policy). The Python code for SARSA algorithm
+implementation is provided in the Listing \ref{lst:sarsa}. The code is
+very similar to that of Q-learning code provided in listing
+\ref{lst:qlearn} except for the \texttt{upate\_q\_table()} function. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+import numpy as np
+import sys 
+import time
+
+class AgentSARSA():
+  def __init__(self, env, alpha=0.3, gamma=0.99, fixed_epsilon=None):
+    self.env = env
+    self.alpha = alpha # learning rate
+    self.gamma = gamma # discount factor
+    if fixed_epsilon is None:
+      self.epsilon = 1.0      # exploration probability
+      self.eps_min = 0.01
+      self.decay_rate = 0.999
+      self.decay_flag = True
+    else:
+      self.epsilon = fixed_epsilon
+      self.decay_flag = False 
+
+    print('Environment Name: ', self.env.spec.name)
+    print('RL Agent: ', 'SARSA')
+
+    # initialize Q table
+    self.Q = np.zeros((self.env.observation_space.n, 
+                              self.env.action_space.n))
+
+
+  def epsilon_greedy_policy(self, state, epsilon):
+    randvar = np.random.uniform(0, 1)
+    if randvar < epsilon:
+      action = self.env.action_space.sample() # explore
+    else:
+      if np.max(self.Q[state]) > 0: 
+        action = np.argmax(self.Q[state]) # exploit
+      else:
+        action = self.env.action_space.sample() # explore
+    return action
+
+
+  def update_q_table(self, s, a, r, s_next, a_next):
+    self.Q[s][a] += self.alpha * (r + self.gamma * \
+                      self.Q[s_next][a_next] - self.Q[s][a])
+  
+  def train(self, num_episodes=1000, freq=1000, filename=None):
+    if filename is not None:
+      file = open(filename, "w")
+    ep_rewards = []
+    start = time.time()
+    for i in range(num_episodes):
+      ep_reward = 0
+      state = self.env.reset()[0] #reset the environment
+      action = self.epsilon_greedy_policy(state, self.epsilon) 
+      while True:
+        # get next_state and reward
+        next_state, reward, done, _, _ = self.env.step(action)
+
+        # get action for next_state
+        next_action = self.epsilon_greedy_policy(next_state, self.epsilon)
+
+        # update q table
+        self.update_q_table(state, action, reward, \
+                                 next_state, next_action)
+
+        # epsodic reward
+        ep_reward += reward
+
+        # prepare for next iteration
+        state = next_state
+        action = next_action
+        if done:
+          ep_rewards.append(ep_reward)
+          break
+      #end of while loop
+      if self.decay_flag: # allow epsilon decay
+        self.epsilon = max(self.epsilon * self.decay_rate, self.eps_min)
+
+      if filename is not None:
+        file.write("{}\t{}\n".format(np.mean(ep_rewards), self.epsilon))
+      if i % freq == 0:
+        print('\rEpisode: {}/{}, Average episodic Reward:{:.3f}.'\
+              .format(i, num_episodes, np.mean(ep_rewards)), end="")
+        sys.stdout.flush()
+    #end of for loop
+    end = time.time()
+    print('\n Training Time: ', (end-start))
+    if filename is not None:
+      file.close()
+
+  def validate(self, num_episodes=10):
+    ep_rewards = []
+    for i in range(num_episodes):
+      state = self.env.reset()[0]
+      ep_reward = 0
+      while True:
+        action = self.epsilon_greedy_policy(state, epsilon=0)
+        next_state, reward, done, _, _ = self.env.step(action)
+        ep_reward += reward
+        state = next_state 
+        if done:
+          ep_rewards.append(ep_reward)
+          break
+    print('\nAverage Episodic Reward: ', np.mean(ep_rewards))
+
+  def display_q_table(self):
+    print("\n ------------------ \n")
+    print(self.Q)
+    print("\n ------------------ \n")
+
+  def __delete__(self):
+    self.env.close()
+  \end{pygments}
+  \caption{Python Code for SARSA Algorithm}
+  \label{lst:sarsa}
+\end{listing}
+
+The performance of SARSA algorithm in solving the \texttt{Taxi} and
+the \texttt{FrozenLake} problem is shown in the code listings
+\ref{lst:taxi_sarsa} and \ref{lst:flake_sarsa} respectively. Comparing
+these outcomes with those provided in the code listing
+\ref{lst:taxi_qlearn} and \ref{lst:flake_qlearn}, we find that SARSA
+takes longer time to train over the same number of episodes in the
+case of \texttt{Taxi} problem with poor performance (lower episodic
+reward). The performance is almost similar in case of
+\texttt{Frozen Lake} problem. The same is reflected in the plot shown
+in Figure \ref{fig:qlearn_sarsa_taxi}. We use decaying epsilon for
+both the algorithms.
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+if __name__ == '__main__':
+    env = gym.make('Taxi-v3')
+    agent = AgentSARSA(env, alpha=0.1)
+    agent.train(num_episodes=20000, filename='taxi_sarsa.tsv')
+    agent.validate()
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+Environment Name:  Taxi
+RL Agent:  SARSA
+Episode: 19000/20000, Average episodic Reward:-1849.457.
+Training Time:  261.57872462272644
+Test:Average Episodic Reward:  -409.2    
+\end{verbatim}
+  \end{framed}
+  \caption{Output of SARSA algorithm when applied to solve the 'Taxi-v3'
+  problem.}
+  \label{lst:taxi_sarsa}
+\end{listing}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+if __name__ == '__main__':
+    env = gym.make('FrozenLake-v1', is_slippery=False)
+    agent = AgentSARSA(env, alpha=0.1)
+    agent.train(num_episodes=1000, filename='flake_sarsa.tsv')
+    agent.validate()
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+Environment Name:  FrozenLake
+RL Agent:  SARSA
+Episode: 900/1000, Average episodic Reward:0.238.
+Training Time:  0.20873093605041504
+Test:Average Episodic Reward:  1.0
+\end{verbatim}
+  \end{framed}
+  \caption{Output of SARSA Algorithm when applied to solve the Frozen
+  Lake problem}
+  \label{lst:flake_sarsa}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap04/qlearn_sarsa_taxi.png}
+  \caption{Comparing the training performance of SARSA and Q learning
+    algorithm for \texttt{Taxi-v3} environment.}
+    \label{fig:qlearn_sarsa_taxi}
+\end{figure}
+
+\section{Difference between Q-Learning and SARSA Algorithms}
+Q-Learning and SARSA are both popular algorithms in reinforcement
+learning for finding the optimal policy in an unknown environment.
+They share many similarities but also have a key difference in how
+they update their values, leading to distinct advantages and
+disadvantages.
+
+Here's a breakdown of their key differences:
+
+\begin{enumerate}
+  \item Update Rule:
+    \begin{itemize}
+      \item Q-Learning: This algorithm is off-policy, meaning it
+        learns the optimal policy regardless of the policy currently
+        being followed. During updates, it uses the maximum Q-value
+        for the next state, essentially assuming the best possible
+        action will be taken from that point. This makes it more
+        optimistic and can lead to faster convergence to the optimal
+        policy.
+
+      \item SARSA: This algorithm is on-policy, meaning it updates its
+        values based on the policy it's currently following (usually
+        an epsilon-greedy policy). It uses the Q-value of the next
+        state and the action actually taken according to the policy.
+        This makes it more realistic and less prone to overestimation,
+        but it can also be slower to converge and potentially get
+        stuck in sub-optimal policies.  
+    \end{itemize} 
+
+  \item Exploration-Exploitation Trade-off:
+    \begin{itemize}
+      \item Q-Learning: Since it uses the maximum Q-value for the next
+        state, Q-learning implicitly encourages exploration by
+        considering all possible actions even if not currently chosen.
+        This can be helpful in navigating complex environments.
+
+      \item SARSA: Because it relies on the actual action taken, SARSA
+        might struggle with exploration if the chosen action leads to
+        areas with low rewards. This can make it prone to getting
+        stuck in local optima.  
+      \end{itemize}
+    \item Convergence:
+      \begin{itemize}
+        \item Q-Learning: Generally, Q-learning converges faster to
+          the optimal policy due to its optimistic update rule and
+          implicit exploration. However, it may require a larger
+          learning rate and can exhibit some instability during
+          learning.
+
+        \item SARSA: While often slower to converge, SARSA's updates
+          are more stable and realistic. It also offers better
+          guarantees of convergence under certain conditions.
+        \end{itemize}
+\end{enumerate}
+
+To summarize, the choice between these algorithms depends on your specific needs:
+
+\begin{itemize}
+  \item Q-Learning: Choose it if you want faster convergence, implicit
+    exploration, and flexibility in switching policies.
+
+  \item SARSA: Choose it if you prioritize stability, realistic
+    updates, and guaranteed convergence (in some cases).  Ultimately,
+    experimenting with both algorithms in your specific environment
+    can help you determine which one performs better.
+\end{itemize}
+
+\section{Conclusion}
+Temporal difference learning approaches use a bootstrapping process to
+estimate the value functions where in the current estimates are
+approximated based on past estimates. These are model-free approaches
+that can be applied non-episodic tasks as well thereby deriving the
+best of both Monte-Carlo and Dynamic Programming approaches.
+Specifically, we review two popular TD approaches namely, Q-learning
+and SARSA algorithms and critically analyzes their advantages and
+disadvantages. 
+
+

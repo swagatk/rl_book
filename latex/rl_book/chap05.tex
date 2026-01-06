@@ -1,0 +1,1563 @@
+\chapter{Deep Q Network}\label{chap:dqn}
+\index{DQN!Deep Q Network}
+\section{Introduction}
+Let's recap what we have studied so far about Q function. Q function,
+also known as state-action value function, is the cumulative future
+reward that an agent can obtain by taking an action $a$ at state $s$
+through a policy $\pi$. In other words, Q function specifies how good
+is an action $a$ at state $s$. The values of all possible actions for
+all states are stored in matrix called Q-table. A \emph{greedy} policy
+selects an action that results in maximum Q value at a given state. In
+the previous chapter, we studied two algorithms namely, Q-learning and
+SARSA to estimate the Q function using temporal difference
+learning. These algorithms are applicable only to problems with
+discrete state and action spaces and suffer from
+\emph{curse-of-dimensionality} with exponentially increasing
+computational cost as the number of states or actions increase.
+
+\gls{dqn} solves the problem associated with discrete states by using
+a deep network to estimate the Q function which can take any arbitrary
+input observation (including continuous, image or text observations). This
+parametric Q function is called a deep Q network (DQN) and is denoted
+by $Q(s,a;\theta)$.  This network is trained by minimizing a loss
+function between predicted value $Q(s,a; \theta)$ and a target
+value as will be discussed in the next section.  
+
+
+
+\section{DQN Algorithm}\label{sec:dqn_algo}
+The Q-learning update equation from the last chapter is given by:
+\begin{equation}
+  Q(s_t,a_t) = Q(s_t,a_t) + \alpha [r + \gamma \max_{a_{t+1}}
+  Q(s_{t+1}, a_{t+1}) - Q(s_t,a_t)]
+  \label{eq:q_update}
+\end{equation}
+where $Q(s_t,a_t)$ is the predicted value and $r+\gamma
+\max_{a_{t+1}}Q(s_{t+1}, a_{t+1})$ is the target value. This target value can be used to create a
+loss function that can be minimized to learn the network parameters
+$\theta$. This loss function for iteration step $t$ is given by: 
+\begin{equation}
+  L_t(\theta_t) = \mathbb{E}_{(s,a)\sim P(s,a)}[y_t - Q(s_t,a_t;\theta_t)]^2
+  \label{eq:dqn_loss}
+\end{equation}
+where $y_t=r + \gamma \max_{a'}Q(s', a';\theta_t)$ is the target
+value for iteration step $t$. For a non-deterministic
+system, the loss function is computed as the expected value over a
+batch of experiences $\{(s_t, a_t, r_t, s_{t+1})\cdots\}$ taken from the
+state-action probability distribution $P(s,a)$. This is achieved by
+storing experience tuples $<s_t,a_t,r_t,s_{t+1}>$ in a replay buffer and
+sampling a batch of experiences for each training step. This form of
+training is known as \emph{experience replay}. The overall scheme of
+DQN learning architecture is shown in Figure
+\ref{fig:dqn_scheme}. It is shown that \emph{batch training}, where the
+network parameters are updated only once for each batch of samples,
+provides faster convergence compared to incremental learning where the
+parameters are updated after every sample in the batch.  The complete
+DQN algorithm is provided in Algorithm \ref{algo:dqn}. 
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap05/dqn_scheme.pdf}
+  \caption{Schematic of DQN Learning Algorithm}
+  \label{fig:dqn_scheme}
+\end{figure}
+
+\begin{algorithm}
+  \caption{DQN Algorithm}
+  \label{algo:dqn}
+  \begin{algorithmic}[1]
+    \State Initialize Replay memory $R$ to capacity $N$.
+    \State Initialize the Q-network $Q(s,a;\theta)$ with random
+    weights $\theta$.
+    \For{$i=1$ to max\_iteration}
+      \State Observe state $s_t$
+      \State Select action using \emph{epsilon-greedy} policy 
+      \State Transition to next state and collect rewards
+      \State Store $(s_i,a_i,r_i,s_{i+1})$ into replay buffer
+      $R$.
+      \For{each update step}
+         \State Randomly sample a batch $B$ of transitions from $R$.
+         \If{done $=$ True} \Comment{terminal state}
+            \State $y_i=r_i$
+         \Else
+            \State $\displaystyle y_i = r_i + \gamma \max_a Q(s_{i+1},a; \theta_i)$
+         \EndIf
+         \State Perform gradient descent to minimize error: 
+         $L_i(\theta_i) = \sum_{i}^{|B|}[y_i - Q(s_i, a_i;\theta_i)]^2$
+       \EndFor
+    \EndFor
+  \end{algorithmic}
+\end{algorithm}
+
+\section{Double DQN Algorithm}\label{sec:ddqn}
+\index{DQN!Double DQN (DDQN)}
+The loss function used for training a DQN is given by:
+
+\begin{equation}
+  L(\theta) = [\underbrace{r + \gamma \max_{a_{t+1}}Q(s_{t+1}, a_{t+1};
+  \theta)}_{\text{target}} -
+  Q(s_t,a_t;\theta)]^2
+  \label{eq:dqn_loss_1}
+\end{equation}
+where the target value uses the maximum of estimated values
+of Q function. This introduces a \emph{maximization bias} as Q
+learning algorithm uses \emph{bootstrapping} - learning estimates from
+previous estimates. Such overestimation can be problematic. This
+overestimation can be solved by double Q learning \cite{van2016deep}
+where two separate Q-value estimators are used to update each other.
+The modified loss function for double Q learning is given by:
+\begin{equation}
+  L(\theta) = [\underbrace{r + \gamma \max_{a_{t+1}} Q'(s_{t+1},
+  a_{t+1};\theta')}_{\text{target}} - Q(s_t, a_t; \theta)]
+  \label{eq:ddqn_loss}
+\end{equation} 
+where the target uses a different network $Q'$ with parameters
+$\theta'$ which is different from the main value estimator $Q$ with
+parameters $\theta$. The model $Q$ and $Q'$ share weights at regular
+interval. One of the models, say, $Q$ is used for \emph{action
+selection} and the other model, say, $Q'$ is used for \emph{action
+evaluation} while computing the target Q value as shown below:
+\begin{equation}
+  Q^*(s_t, a_t) = y_t \approx r_t + \gamma \underbrace{Q'(s_{t+1},
+  \underbrace{\arg \max_{a_t}
+Q(s_t, a_t)}_{\text{action selection}})}_{\text{action evaluation}} 
+  \label{eq:target_q_value}
+\end{equation}
+The error arising from the difference between $Q$ and $Q'$ is
+minimized by slowly copying the parameters of $Q$ to $Q'$ through
+\emph{Polyak averaging} given by
+\begin{equation}
+  \theta' = \tau \theta + (1 - \tau) \theta'
+  \label{eq:polyak}
+\end{equation}
+where $\tau \in(0,1)$ is the averaging factor. The steps to implement
+double DQN (DDQN) algorithm is provided in Algorithm \ref{algo:ddqn}. 
+
+\begin{algorithm}
+  \caption{Double DQN (DDQN) Algorithm}
+  \label{algo:ddqn}
+  \begin{algorithmic}[1]
+    \State Initialize primary network $Q_\theta$ and target network
+    $Q_{\theta'}$, replay buffer $R$ and $\tau << 1$.
+    \For{each iteration}
+      \State Observe the state $s_t$ and take action $a_t$ using
+      epsilon-greedy policy.
+      \State Transition to next state $s_{t+1}$ and collect reward
+      $r_t$
+      \State Store $(s_t, a_t, r_t, s_{t+1})$ in replay buffer
+      $R$.
+      \For{each update step}
+         \State sample a batch $B$ of episodes from replay buffer
+         $R$.
+         \State Compute target Q value using equation
+         \eqref{eq:target_q_value}.
+         \State Perform gradient descent step to minimize
+         $\sum_{|B|}(Q^*(s_t,a_t) - Q_\theta(s_t, a_t))^2$.
+         \State Update target network parameters using equation
+         \eqref{eq:polyak}
+      \EndFor 
+    \EndFor 
+  \end{algorithmic}
+\end{algorithm}
+
+\section{Python implementation of DQN Algorithm}
+\index{DQN!Replay Buffer}
+\index{Replay Buffer}
+
+\subsection{Replay Buffer} \label{sec:replay_buffer}
+As mentioned before, the experience tuple $(s_t, a_t, r_t, s_{t+1},
+d)$ generated using behavioural policy is stored in a buffer. A batch
+of these experiences are sampled randomly from the buffer during each
+training step. This form of training is called \emph{experience
+replay}. A Python class for implementing this replay buffer is
+provided in the code Listing \ref{lst:replay_buffer}. The replay
+buffer has a fixed size. When the buffer is full, the data is
+overwritten from the beginning of the buffer by using circular
+indexing. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import numpy as np
+class ReplayBuffer():
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.buffer = np.zeros(self.capacity, dtype=object)
+        self.idx = 0
+        self.full = False
+        
+    def add(self, experience:tuple):
+        self.buffer[self.idx] = experience
+        self.idx = (self.idx + 1) % self.capacity 
+        # set this flag if buffer is full
+        self.full = self.full or self.idx == 0 
+        
+    def sample(self, batch_size=24):
+        indices = np.random.randint(0, self.capacity \
+                                    if self.full else self.idx, 
+                                    size=batch_size)
+        batch = self.buffer[indices]
+        return batch
+    
+    def __getitem__(self, index):
+        if index >= 0 and index < self.capacity \
+                        if self.full else self.idx: # sanity check 
+            return self.buffer[index]
+        else:
+            raise ValueError('Index is out of range')
+    
+    def __len__(self):
+        # return the current length of buffer
+        return self.capacity if self.full else self.idx 
+  \end{pygments}
+  \caption{Python class for implementing Replay Buffer.}
+  \label{lst:replay_buffer}
+\end{listing}
+
+\subsection{The DQN Class}
+The Python code for implementing a DQN agent class is provided in the
+code Listing \ref{lst:ddqn}. It provides an option to select between
+DQN and Double DQN architecture. It also allows passing a deep network
+model created externally. It creates a replay buffer memory by
+instantiating the \texttt{ReplayBuffer} class provided in code Listing
+\ref{lst:replay_buffer}. The experiences can be stored using the class
+method \texttt{store\_experience()}. The class provides methods to save
+and load Q network parameters.  
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import sys
+import os
+import random
+import tensorflow as tf
+import keras
+from keras.layers import Dense
+from keras.optimizers import Adam
+from keras.models import Sequential
+
+class DQNAgent:
+    def __init__(self, obs_shape: tuple, n_actions: int, 
+                buffer_size=2000, batch_size=24,
+                ddqn_flag=True, model=None):
+        
+        self.obs_shape = obs_shape
+        self.action_size = n_actions   # number discrete actions
+        self.ddqn = ddqn_flag   # choose between DQN & DDQN
+        
+        # hyper-parameters for DQN
+        self.gamma = 0.99    # discount factor 
+        self.epsilon = 1.0    # exploration rate - epsilon-greedy policy
+        self.epsilon_decay = 0.999 
+        self.epsilon_min = 0.01 
+        self.batch_size = batch_size 
+        self.buffer_size = buffer_size
+        self.train_start = 1000  # minimum buffer size to start training
+        self.learning_rate = 0.001 # learning rate for the Deep Network
+        
+        # create a replay buffer to store experiences
+        self.memory = ReplayBuffer(self.buffer_size)
+        
+        # create main model & target model   - DDQN Architecture
+        if model is None:
+            self.model = self._build_model()
+            self.target_model = self._build_model()
+        else:
+            self.model = model
+            self.target_model = tf.keras.models.clone_model(model)  
+                        
+        # initialize target model
+        self.target_model.set_weights(self.model.get_weights())
+        
+    
+    def _build_model(self):
+        model = keras.Sequential([
+            keras.layers.Dense(24, input_shape=self.obs_shape, 
+                              activation='relu',
+                              kernel_initializer='he_uniform'),
+            keras.layers.Dense(24, activation='relu', 
+                              kernel_initializer='he_uniform'),
+            keras.layers.Dense(self.action_size, activation='linear',
+                              kernel_initializer='he_uniform')  
+        ])
+        model.summary()
+        model.compile(loss='mse', optimizer=Adam(
+                                 learning_rate=self.learning_rate))
+        return model
+
+    def update_target_model(self, tau):
+        pass
+    
+    def get_action(self, state):
+        pass
+    
+    def store_experience(self, state, action, reward, next_state, done):
+        self.memory.add((state, action, reward, next_state, done))
+    
+    def get_target_q_value(self, s_next):
+        pass
+    
+    def experience_replay(self):
+        pass
+    
+    def update_epsilon(self):
+        pass 
+    
+    def save_model(self, filename):
+        self.model.save_weights(filename)
+    
+    def load_model(self, filename):
+        self.model.load_weights(filename)
+  \end{pygments}
+  \caption{(Double) DQN agent class template}
+  \label{lst:ddqn}
+\end{listing}
+
+\subsection{Epsilon-Greedy Policy}
+The class method \texttt{get\_action()} implements the
+\emph{epsilon-greedy} policy to solve the exploration vs exploitation
+dilemma during the learning process. The hyperparameter $\epsilon \in
+(0,1)$ controls the exploration rate. A uniform random number is generated
+between 0 and 1. The agent takes random action (explore) if this
+random number is less than $\epsilon$. Otherwise, it takes a
+\emph{greedy} action (action resulting in maximum Q value) based on
+past experience. The training starts with $\epsilon=1$ resulting in
+high exploration. The exploration rate is gradually reduced over
+time by using the class method \texttt{update\_epsilon()} thereby
+allowing the agent to exploit the past knowledge. During the testing
+phase, exploration rate is set to 0 making the agent to take actions
+based only on a greedy policy. The definitions for the above two
+methods are provided in the code Listing \ref{lst:ddqn_egp}. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class DQNAgent()
+    def get_action(self, state, epsilon=None):  
+        # epsilon-greedy policy
+        if epsilon is None:
+            epsilon = self.epsilon   # decaying epsilon
+        if np.random.rand() <= epsilon: # explore
+            return random.randrange(self.action_size)  
+        else:
+            q_value = self.model.predict(state, verbose=0)  
+            return np.argmax(q_value[0])
+            
+  \end{pygments}
+  \caption{Code for DQN Class: epsilon-greedy policy}
+  \label{lst:ddqn_egp}
+\end{listing}
+
+\subsection{Experience Replay}
+The code for training a DQN is provided in the code Listing
+\ref{lst:ddqn_exprep}. The training is carried out by a method called
+\emph{experience replay} where the experiences are first stored in a
+replay buffer and then used during the training phase through random
+sampling. This is
+implemented by the class method
+\texttt{experience\_replay()}. A batch of experiences is sampled from
+the replay buffer. Target Q values is computed for this batch using
+equation \eqref{eq:target_q_value}. Gradient descent is applied to
+minimize the error between the predicted Q values and target Q values
+during each iteration step. The exploration rate $\epsilon$ is reduced
+after each training step.   
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class DQNAgent():
+    def get_target_q_value(self, next_states): # batch input
+        q_value_ns = self.model.predict(next_states, verbose=0)  # Q(s', :)
+        if self.ddqn: ## DDQN algorithm
+            # primary model is used for action selection: a = arg max Q(s,a)
+            max_actions = np.argmax(q_value_ns, axis=1)
+            # use target model for action evaluation: Q'(s',:) 
+            target_q_values_ns = self.target_model.predict(
+                                             next_states, verbose=0)  
+            # Q'(s', argmax(Q(s,a)))
+            max_q_values = target_q_values_ns[
+                        range(len(target_q_values_ns)), max_actions] 
+        else: # DQN 
+            max_q_values = np.amax(q_values_ns, axis=1)
+        return max_q_values
+    
+    def experience_replay(self):
+        if len(self.memory) < self.train_start:
+            return        
+        # sample experiences from replay buffer
+        batch_size = min(self.batch_size, len(self.memory))
+        mini_batch = self.memory.sample(self.batch_size)
+        
+        # unwrapping mini_batch tuple
+        states = np.zeros((self.batch_size, *self.obs_shape))
+        next_states = np.zeros((self.batch_size, *self.obs_shape))
+        actions = np.zeros((self.batch_size, 1))
+        rewards = np.zeros((self.batch_size, 1))
+        dones = np.zeros((self.batch_size, 1))
+        for i in range(len(mini_batch)):  
+            states[i] = mini_batch[i][0]
+            actions[i] = mini_batch[i][1]
+            rewards[i] = mini_batch[i][2]
+            next_states[i] = mini_batch[i][3]
+            dones[i] = mini_batch[i][4]
+            
+        q_values_cs = self.model.predict(states, verbose=0)
+        max_q_values_ns = self.get_target_q_value(next_states)
+        
+        # compute target q value
+        for i in range(len(q_values_cs)):
+            action = actions[i].astype(int)[0]
+            done = dones[i].astype(bool)[0]
+            reward = rewards[i][0]
+            if done: # terminal state
+                q_values_cs[i][action] = reward
+            else:
+                q_values_cs[i][action] = reward + \
+                              self.gamma * max_q_values_ns[i] 
+                
+        # train the Q network
+        self.model.fit(np.array(states), np.array(q_values_cs),
+                      batch_size=batch_size,
+                      epochs=1,
+                      verbose=0)
+        
+        # decay epsilon over time
+        self.update_epsilon()
+
+    def update_epsilon(self):
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+    
+  \end{pygments}
+  \caption{Code for DQN class: experience replay class}
+  \label{lst:ddqn_exprep}
+\end{listing}
+
+
+\subsection{Training an agent for solving a Gym Problem}
+The code for training a DQN agent for a given problem environment is
+provided in the code Listing \ref{lst:ddqn_train}. The
+\texttt{train()} function primarily takes two arguments, one
+environment object and a RL agent.  The 
+\texttt{train()} method iterates over a number of episodes. For each
+iterative step, the agent observes  the environment ($s_t$), takes an
+action $a_t$ based on $\epsilon-$greedy policy and then, transitions to the next
+state ($s_{t+1}$) while collecting reward $r_t$. The end of episode is
+indicated setting the \texttt{done} flag to \texttt{True}. The experience tuple
+($s_t, a_t, r_t, s_{t+1}, done$) is stored in the agent's replay
+buffer. These experiences are then sampled to train the agent during
+each iterative step. The weights of the main model is copied at
+regular intervals into the target model.  The frequency of training
+updates and target updates is controlled by the arguments
+\texttt{train\_freq} and \texttt{copy\_freq} respectively. In many
+case, \emph{reward engineering} must be carried out to allow the agent
+to solve the problem effectively in a reasonable time. For example, in case of
+\texttt{Cartpole-v0} environment, the agent is penalized when the
+episode terminates.             
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+def train(env, agent, max_episodes=300, train_freq=1, 
+                        copy_freq=1, filename=None):
+    if filename is not None:
+        file = open(filename, 'w')
+    #averaging factor - choose between soft & hard update
+    tau = 0.1 if copy_freq < 10 else 1.0  
+    best_score = 0
+    scores = []
+    avg_score, avg100_score = [], []
+  global_step_cnt = 0  
+    for e in range(max_episodes):
+        state = env.reset()[0]
+        state = np.expand_dims(state, axis=0)  
+        done = False
+        ep_reward = 0
+        t = 0
+        while not done:
+            global_step_cnt += 1
+            # take action
+            action = agent.get_action(state)
+            # collect reward & transition to next state
+            next_state, reward, done, _, _ = env.step(action)
+            next_state = np.expand_dims(next_state, axis=0)  
+            
+            # reward engineering 
+            # discourages premature termination
+            reward = reward if not done else -100  
+            
+            #store experience
+            agent.store_experience(state, action, \
+                                 reward, next_state, done)
+            
+            state = next_state
+            ep_reward += reward
+            t += 1
+            
+            # train
+            if global_step_cnt % train_freq == 0:
+                agent.experience_replay()
+                
+            # update the target model
+            if global_step_cnt % copy_freq == 0:
+                agent.update_target_model(tau=tau)
+        # while loop ends here
+        if e > 100 and t > best_score: 
+            agent.save_model('best_model.weights.h5')
+            best_score=t
+        scores.append(t)
+        avg_score.append(np.mean(scores))
+        avg100_score.append(np.mean(scores[-100:]))
+        if filename is not None:
+            file.write(f'{e}\t{t}\t{np.mean(scores)}\
+                              \t{np.mean(scores[-100:])}\n')
+            file.flush()
+            os.fsync(file.fileno())
+        if e % 20 == 0:
+            print(f'e:{e}, ep_reward:{t}, avg_ep_reward: \
+                                      {np.mean(scores):.2f}')
+    # end of for loop
+    print('end of training')
+    file.close() 
+  \end{pygments}
+  \caption{Python code for training a DQN for a given Gym Environment}
+  \label{lst:ddqn_train}
+\end{listing}
+
+\subsection{Solving the CartPole problem using DQN algorithm}
+\index{Environment!Gym!CartPole}
+We will now use the DQN class created above to solve the CartPole-v0
+problem. Few snapshots of the simulation environment is shown in
+Figure \ref{fig:cartpole}.  It consists of a cart
+   (shown in black color) and a vertical bar attached to the cart
+   using passive pivot joint.  The cart can move left or right. The
+   problem is to prevent the vertical bar from falling by moving the
+   car left or right. The state vector for this system $\mathbf{x}$ is
+   a four dimensional vector having components $\{x,\dot{x}, \theta,
+   \dot{\theta}\}$. The action has two states: left (0) and right (1).
+   The episode terminates if (1) the pole angle is more than $\pm
+   12^{\circ}$ from the vertical axis, or (2) the cart position is
+   more than $\pm 2.4$ cm from the centre, or (3) the episode length
+   is greater than 200 (for v0) and 500 (for v1). The agent receives a
+   reward of 1 for every step taken including the termination step.
+   The problem is considered solved, if the average reward is greater
+   than or equal to 195 over 100 consecutive episodes.     
+                      
+\begin{figure}[!t] \centering \begin{tabular}{ccc}
+    \includegraphics[scale=0.5]{./figures/chap05/cartpole2.png} &
+    \includegraphics[scale=0.2]{./figures/chap05/cartpole.png} &
+    \includegraphics[scale=0.5]{./figures/chap05/cartpole3.png} \\
+    \footnotesize{(a)} & \footnotesize{(b)} & \footnotesize{(c)}
+  \end{tabular} \caption{Visualization of CartPole environment. The
+    task is to balance the pole in the vertical position by
+    controlling the motion of the cart.} \label{fig:cartpole}
+  \end{figure}
+
+The complete code for training a DQN agent to solve Gym's CartPole
+problem is provided in the code Listing \ref{lst:dqn_cp_train} along
+with the program output. The performance of DDQN algorithm is shown in
+Figure \ref{fig:dqn_cp}.  As can be seen, the problem is solved in
+about 100 episodes. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+    import gymnasium as gym
+
+    if __name__ == '__main__':    
+    # create gym environment
+    env = gym.make('CartPole-v0')
+    obs_shape = env.observation_space.shape
+    n_actions = env.action_space.n 
+
+    # create DQN Agent
+    agent = DQNAgent(obs_shape, n_actions,
+    buffer_size=2000,
+    batch_size=24)
+    # train the agent
+    train(env, agent, max_episodes=200, copy_freq=100, 
+    filename='cp_dqn.txt')
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+    e:0, ep reward:24, avg ep reward:24.00
+    e:20, ep reward:30, avg ep reward:23.05
+    e:40, ep reward:17, avg ep reward:21.27
+    e:60, ep reward:29, avg ep reward:21.56
+    e:80, ep reward:72, avg ep reward:31.91
+    e:100, ep reward:10, avg ep reward:235.54
+    e:120, ep reward:210, avg ep reward:210.24
+    e:140, ep reward:726, avg exp reward:222.46
+    e:160, ep reward:152, avg ep reward:479.54
+    e:180, ep reward:479, avg ep reward:458.39
+    end of training
+    \end{verbatim}
+  \end{framed}
+  \caption{Python code for training a DQN agent and its console output}
+  \label{lst:dqn_cp_train}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap05/cp_dqn_2.png}
+  \caption{Performance of DDQN algorithm in solving the CartPole
+  problem}
+  \label{fig:dqn_cp}
+\end{figure}
+
+\section{Priority Experience Replay (PER)}\label{sec:per}
+\index{DQN!Priority Experience Replay (PER)}
+In \emph{experience replay}, the experiences are randomly sampled from
+the replay buffer. All the experiences (transitions) are treated
+equally during the sampling process. However, some experiences could
+be more informative for learning than others even when they occur less
+frequently. Priority experience
+replay (PER) aims to solve this problem by prioritizing these
+informative experience tuples (or state transitions). It assigns a
+priority score to each transition, with higher scores for transitions
+with larger \gls{td} errors. During sample, the transitions (or
+experience tuples) are chosen with a probability based on their
+priority scores. The priority score assigned to each sample is given
+by 
+\begin{equation}
+  p_i = |\delta_i| + e
+  \label{eq:p_score}
+\end{equation}
+where $\delta_i$ is the magnitude of \gls{td} error associated with
+the sample $i$ and $e$ is a
+constant value that is added so that no experience is assigned a zero
+value. So, the experiences along with their priorities are stored in
+the replay buffer. However, sampling experiences based on priority may
+lead to \emph{prioritization bias} leading to loss of experience
+diversity as the high-priority samples will dominate the training
+process thereby potentially hindering the agent's ability to
+generalize to unseen situations. This can be solved by using
+\emph{stochastic prioritization} which introduces a randomization
+factor during experience sampling to ensure a balance between
+prioritizing informative transitions and maintaining exploration of
+the entire replay buffer.  This is achieved by selecting the samples
+with a probability given by: 
+\begin{equation}
+  P(i) = \frac{p_i^a}{\sum_k^N p_k^a} 
+  \label{eq:p_prob}
+\end{equation}
+where $a$ is hyperparameter to introduce randomness in the experience
+selection for the replay buffer. $N$ is the total number of samples in
+the replay buffer. If $a=0$, samples are selected with
+equal probability (uniform randomness) and if $a=1$, samples with
+highest priorities are only selected.  
+
+The non-uniform sampling introduced by stochastic prioritization does
+not completely solve this bias and may still lead to overfitting.  To
+compensate this bias, we use \emph{importance sampling (IS)}
+\index{Importance Sampling} weights
+that are inversely proportional to its sampling probability $P(i)$
+given by eqn. \eqref{eq:p_prob}. So, the higher priority experiences
+will have lower weights. This will effectively reduce their influence
+on the training. The weights for each sample is given by:
+\begin{equation}
+  w_i = \left(\frac{1}{N}\frac{1}{P(i)}\right)^b
+  \label{eq:isw}
+\end{equation}
+The role of $b$ is to control how much these importance sampling
+weights affect the learning. We will use a binary sum tree to store 
+priority experiences providing a $O(\log n)$ time complexity
+in storing and retrieving samples.
+
+\subsection{Sum-Tree Data Structure for Priority Replay Buffer}
+\label{sec:sumtree}
+\index{Sum-Tree}
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap05/sum-tree-1.pdf}  
+  \caption{Adding samples with priority to a sum-tree replay buffer}
+  \label{fig:st_add}
+\end{figure}
+
+A Sum-tree is a binary tree where the value at each node is the sum of
+the values of its children. In a binary tree, each node has at most
+two child nodes. If $n$ is the replay buffer size then, the
+total number of nodes in the tree will be $2n-1$ which can be
+considered as the length of tree. The data (or the experiences) are
+stored in the $n$ leaf nodes of the sum-tree. The index of leaf node
+is ${i+n-1,\; i=0,1,2,\cdots,n-1}$. Each leaf node stores both data
+(experience tuple) and priority while other nodes only store priority.
+Initially, all data and priorities are set to $0$. The root
+node stores the total priority. 
+
+\subsubsection{Adding experience to the replay buffer}
+\label{sec:add_sample}
+The process of adding experiences to the sum-tree can be better
+understood by analysing the Figure \ref{fig:st_add} that shows a
+sum-tree buffer with a capacity to store only 4 samples ($n=4$). The
+leaf indices of this tree are 3, 4, 5 and 6 respectively. Whenever a
+data is added to the leaf node, the change in priority is propagated
+upwards until the root node. Let's assume that the data and priority
+being added to each of the leaf nodes are (1,0.5), (2, 0.3), (3, 0.7)
+and (4, 0.2) respectively. The priority of the non-leaf nodes are 0.8
+at node 1, 0.9 at node 2 and 1.7 at node 0. The total priority (TP) in
+this case is 1.7. The updates occurring at each instance of sample
+adding is shown in different colors. 
+
+
+\subsubsection{Retrieving samples from the buffer}
+\label{sec:retr_sample}
+While retrieving $m$ samples ($m \le n$), we
+divide the range between 0 and total priority (TP) into $m$ segments
+and then select one sample uniformly from each segment. The process of
+retrieving samples with a given priority value $v$ is demonstrated in Figure
+\ref{fig:st_retr}. Let us assume that we want to retrieve 2 samples
+($m=2$) having priority values $v_1=0.7$ and $v_2=1.2$ from the
+sum-tree created above. The colored arrows show the process flow
+during the retrieval process starting from the root node. The data points
+retrieved are  $D1=2$  and $D2=3$ respectively. Let's understand the
+process by considering the priority value $v_1=0.7$ first. It starts
+by comparing $v_1$ with the root node value which is the total priority
+(TP=1.7). The value being less, $v_1$ is now compared with the left
+child node with index 1 having a priority value of 0.8. The value
+being less again, it moves to the next left
+child node with index 3 whose priority value is 0.5. Here $v_1 > 0.5$
+and hence, the right child node with index 4 is selected for the next
+step. Also, the priority of the left child node is updated to have new
+priority value = 0.7 - 0.5 = 0.3. The right child node with index 4
+being a leaf node, the data point D1=2 is retrieved (shown in
+green color). The violet arrow shows the steps involved in retrieving
+the second data sample with priority value of 1.2. 
+
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap05/sum-tree-2.pdf}
+  \caption{Retrieving samples with priority from a sum-tree replay
+  buffer}
+  \label{fig:st_retr}
+\end{figure}
+
+
+\subsection{Python Implementation of Sum-Tree class}
+
+The Python code for implementing a Sum-tree class is provided
+in the code Listing \ref{lst:st_class}. It uses two arrays - one for
+storing data and other for storing priorities. The \texttt{self.data} buffer has a
+length $n$ which is the maximum capacity of the replay buffer. The
+size of the \texttt{self.tree} buffer is $2n-1$. The data buffer is
+overwritten starting from the beginning when it is full indicated by
+the \texttt{self.full} flag. The priority stored in \texttt{self.tree}
+buffer is updated whenever a data is added at a leaf node. The root
+node stores the total priority. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+    class SumTree(object):
+    # Here we initialize the tree with all nodes = 0, 
+    # and initialize the data with all values = 0
+    def __init__(self, capacity):
+    # Number of leaf nodes (final nodes) that contains experiences
+    self.capacity = capacity
+    self.data_pointer = 0
+    self.full = False   # indicates if the buffer is full
+    self.tree = np.zeros(2 * capacity - 1)  # contains priorities
+    # Contains the experiences (so the size of data is capacity)
+    self.data = np.zeros(capacity, dtype=object)
+
+    def add(self, priority, data):
+    # data is stored at the leaf of the tree from index: n-1 to 2*n-1
+    tree_index = self.data_pointer + self.capacity - 1
+    # Update data frame
+    self.data[self.data_pointer] = data
+    # Update the leaf
+    self.update(tree_index, priority)
+    # Add 1 to data_pointer
+    self.data_pointer += 1
+    # If above capacity, go back to first index to overwrite 
+    if self.data_pointer >= self.capacity:  
+    self.data_pointer = 0
+    self.full = True
+
+    def __len__(self):  # returns the size of data buffer only
+    return self.capacity if self.full else self.data_pointer
+
+    def __getitem__(self, index):
+    # return data and priority at index i
+    if index >= 0 and index < self.capacity \
+    if self.full else self.data_pointer:
+    tree_idx = index + self.capacity - 1
+    return self.data[index], self.tree[tree_idx]
+    else:
+    raise ValueError('index out of range')
+
+
+    def update(self, tree_index, priority):
+    # Change = new priority score - former priority score
+    change = priority - self.tree[tree_index]
+    self.tree[tree_index] = priority
+
+    # then propagate the change through tree
+    # this method is faster than the recursive loop
+    while tree_index != 0:
+    tree_index = (tree_index - 1) // 2
+    self.tree[tree_index] += change
+
+    def get_leaf(self, v):
+    parent_index = 0
+    while True:
+    left_child_index = 2 * parent_index + 1
+    right_child_index = left_child_index + 1
+
+    # If we reach bottom, end the search
+    if left_child_index >= len(self.tree):
+    leaf_index = parent_index
+    break
+    else: # downward search, always search for a higher priority node
+    if v <= self.tree[left_child_index]:
+    parent_index = left_child_index
+    else:
+    v -= self.tree[left_child_index]
+    parent_index = right_child_index
+
+    data_index = leaf_index - self.capacity + 1
+    return leaf_index, self.tree[leaf_index], self.data[data_index]
+
+    @property
+    def total_priority(self):
+    return self.tree[0] # Returns the root node
+  \end{pygments}
+  \caption{Python implementation of Sum-tree class}
+  \label{lst:st_class}
+\end{listing}
+
+\subsection{Python implementation of Priority Replay Buffer using
+Sum-Tree}
+The python code for the replay buffer that uses sum-tree class defined
+in the previous sub-section is provided in the code Listing
+\ref{lst:st_buffer}. The hyper-parameter \texttt{PER\_e} ensures
+that none of the experiences are assigned zero priority as defined in
+equation \eqref{eq:p_score}. The hyper-parameter \texttt{PER\_a} is
+used in the stochastic prioritization probability equation
+\eqref{eq:p_prob} to balance between selecting high priority
+experiences and exploring other experiences in the replay buffer. The
+hyper-parameter \texttt{PER\_b} is used in equation \eqref{eq:isw} to
+control how much importance sampling affects the learning process. The
+class method \texttt{STBuffer.add()} updates the priority of tree as the
+samples are added one by one. The class method
+\texttt{STBuffer.sample()} selects a given number of samples from the
+replay buffer.  The class method \texttt{STBuffer.batch\_update()}
+updates the priority of the samples in the replay buffer based on the
+TD error. 
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+    class STBuffer(object):
+    # stored as ( state, action, reward, next_state ) in SumTree
+    PER_e = 0.01  # avoid some experiences to have 0 probability 
+    PER_a = 0.6  #  control randomness in stochastic prioritization
+    PER_b = 0.4  # importance-sampling, from initial value increasing to 1
+    PER_b_increment_per_sampling = 0.001
+    absolute_error_upper = 1.  # clipped abs error
+
+    def __init__(self, capacity):
+    # Making the tree
+    self.tree = SumTree(capacity)
+
+    def add(self, experience):
+    # Find the max priority of leaf nodes
+    max_priority = np.max(self.tree.tree[-self.tree.capacity:])
+    # If the max priority = 0 we can't put priority = 0 
+    # since this experience will never have a chance to be selected
+    # So we use a minimum priority
+    if max_priority == 0:
+    max_priority = self.absolute_error_upper
+    # set the priority for new experience
+    self.tree.add(max_priority, experience)   
+
+    def sample(self, n):
+    # Create a minibatch array that will contains the minibatch
+    minibatch = []
+    b_idx = np.empty((n,), dtype=np.int32)
+    # array to store sample priorities
+    priorities = np.empty((n,), dtype=np.float32)  
+    # Calculate the priority segment
+    # we divide the Range[0, ptotal] into n ranges
+    priority_segment = self.tree.total_priority / n  # priority segment
+    for i in range(n):
+    # A value is uniformly sample from each range
+    a, b = priority_segment * i, priority_segment * (i + 1)
+    value = np.random.uniform(a, b)
+    # Experience that correspond to each value is retrieved
+    index, priority, data = self.tree.get_leaf(value)
+    b_idx[i]= index
+    priorities[i] = priority   # experimental 
+    minibatch.append([data[0],data[1],data[2],data[3],data[4]])
+    return b_idx, minibatch, 
+
+    def batch_update(self, tree_idx, abs_errors):
+    abs_errors += self.PER_e  # convert to abs and avoid 0
+    clipped_errors = np.minimum(abs_errors, self.absolute_error_upper) 
+    # stochastic prioritization
+    ps = np.power(clipped_errors, self.PER_a)  # values between 0 and 1
+    # convert priorities into probabilities
+    prob = ps / np.sum(ps) # experimental
+    # importance sampling weights: iw = [1 / ( N * P)]^b
+    is_wts = np.power(len(prob) * prob, -self.PER_b) 
+    for ti, p, iw in zip(tree_idx, ps, is_wts):
+    new_p = p * iw
+    self.tree.update(ti, new_p)
+    # gradually increase PER_b for more focus on high-error experience
+    self.PER_b = min(1.0, self.PER_b + \
+    self.PER_b_increment_per_sampling)
+
+    def __len__(self):
+    return len(self.tree) 
+
+    def __getitem__(self, index):
+    return self.tree[index]
+  \end{pygments}
+  \caption{Python implementation of Priority Replay Buffer}
+  \label{lst:st_buffer}
+\end{listing}
+
+\subsection{Python code for DQN Agent with PER}
+The Python code for implementing a DQN Agent with PER buffer is
+provide in the code Listing \ref{lst:dqn_per}. The class
+\texttt{DQNPERAgent} inherits most of its properties from the
+\texttt{DQNAgent} class. Please note that here \texttt{STBuffer} is
+used to create the memory replay buffer called \texttt{self.memory}
+instead of the simple instead of the simple \texttt{ReplayBuffer}.
+This child class overrides the \texttt{experience\_replay()}  function
+of the parent class. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+    class DQNPERAgent(DQNAgent):
+    def __init__(self, obs_shape: tuple, n_actions: int,
+    buffer_size=2000, batch_size=24,
+    ddqn_flag=True, model=None):
+    super().__init__(obs_shape, n_actions, buffer_size,
+    # uses a sumtree Buffer
+    self.memory = STBuffer(capacity=buffer_size)
+
+
+    def experience_replay(self):
+    if len(self.memory) < self.train_start:
+    return
+    batch_size = min(self.batch_size, len(self.memory))
+    tree_idx, mini_batch = self.memory.sample(self.batch_size)
+    states = np.zeros((self.batch_size, *self.obs_shape))
+    next_states = np.zeros((self.batch_size, *self.obs_shape))
+    actions = np.zeros((self.batch_size, 1))
+    rewards = np.zeros((self.batch_size, 1))
+    dones = np.zeros((self.batch_size, 1))
+    for i in range(len(mini_batch)):
+    states[i] = mini_batch[i][0]
+    actions[i] = mini_batch[i][1]
+    rewards[i] = mini_batch[i][2]
+    next_states[i] = mini_batch[i][3]
+    dones[i]  = mini_batch[i][4]
+    q_values_cs = self.model.predict(states, verbose=0)
+    q_values_cs_old = np.array(q_values_cs).copy() # deep copy
+    max_q_values_ns = self.get_target_q_value(next_states)
+    # Q-learning updates
+    for i in range(len(q_values_cs)):
+    action = actions[i].astype(int)[0] # check
+    done = dones[i].astype(bool)[0] # check
+    reward = rewards[i][0] # check
+    if done:
+    q_values_cs[i][action] = reward
+    else:
+    q_values_cs[i][action] = reward + \
+    self.gamma * max_q_values_ns[i]
+    # update experience priorities
+    indices = np.arange(self.batch_size, dtype=np.int32)
+    actions = actions[:,0].astype(int)
+    absolute_errors = np.abs(q_values_cs_old[indices, actions] - \
+    q_values_cs[indices, actions])
+    # update sample priorities
+    self.memory.batch_update(tree_idx, absolute_errors)
+    # train the Q network
+    self.model.fit(np.array(states),
+    np.array(q_values_cs),
+    batch_size = batch_size,
+    epochs = 1,
+    verbose = 0)
+    # decay epsilon over time
+    self.update_epsilon()
+  \end{pygments}
+  \caption{Python Code for implementing DQN with PER}
+  \label{lst:dqn_per}
+\end{listing}
+
+\subsection{Solving MountainCar Problem using DQN with PER} 
+The Mountain Car Problem involves a car moving in 1D environment. It
+has two states, namely, position ($x$) and velocity ($\dot{x}$) of the
+car. The car can take three discrete actions - accelerate left (0),
+don't accelerate (0) and accelerate right (2). The goal is to reach
+the flag placed on the top of the right hill ($x\ge 0.5)$) as quickly as possible.
+The agent receives a reward of -1 every time it fails to reach the
+goal. Each episode consists of 200 steps leading to a total reward of
+-200 in the beginning. The initial and desired final state of the
+environment is shown in Figure \ref{fig:gym_mc}. The problem is
+considered solved if the car can reach the flag pole in less than 200
+steps. 
+
+
+\begin{figure}[!t]
+  \centering
+  \begin{tabular}{cc}
+    \includegraphics[scale=0.4]{./figures/chap05/mountain_car.png}  &
+    \includegraphics[scale=0.4]{./figures/chap05/mc_final_state.png} \\
+    \small{(a) Initial random state} & \small{(b) Desired final state}
+  \end{tabular}
+  \caption{Gym's Mountain Car Problem. The goal is to reach the top of
+  the hill as soon as possible.}
+  \label{fig:gym_mc}
+\end{figure}
+
+\subsubsection{Training the agent}
+The training function used for solving this problem is provided in the
+code Listing \ref{lst:mc_train}. Reward engineering is an important
+step towards solving this problem. In this case, the agent is
+given an  additional reward of +200 whenever it reaches to the top
+and reward proportional to its change in position and acceleration
+applied for other positions. This encourages the agent to learn
+faster. The problem is considered solved if the car reaches the flag
+pole indicated by \texttt{done=True} in less than 200 steps.
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+    def train(env, agent, max_episodes=300,
+    train_freq=1, copy_freq=10, filename=None, wtfile_prefix=None):
+    if filename is not None:
+    file = open(filename, 'w')
+    if wtfile_prefix is not None:
+    wt_filename = wtfile_prefix + '_best_model.weights.h5'
+    else:
+    wt_filename = 'best_model.weights.h5'
+
+    # choose between soft & hard target update 
+    tau = 0.1 if copy_freq < 10 else 1.0
+    max_steps = 200
+    car_positions = []
+    scores, avg_scores = [], []
+    global_step_cnt = 0
+    for e in range(max_episodes):
+    # make observation
+    state = env.reset()[0]
+    state = np.expand_dims(state, axis=0)
+    done = False
+    ep_reward = 0
+    t = 0
+    max_pos = -99.0
+    while not done:
+    global_step_cnt += 1
+    # take action using epsilon-greedy policy
+    action = agent.get_action(state)
+    # transition to next state
+    # and collect reward from the environment
+    next_state, reward, done, _, _ = env.step(action)
+    next_state = np.expand_dims(next_state, axis=0) # (-1, 4)
+    # reward engineering - important step
+    if next_state[0][0] >= 0.5: 
+    reward += 200
+    else:
+    reward = 5*abs(next_state[0][0] - state[0][0])\
+    + 3*abs(state[0][1])
+
+    # track maximum car position
+    if next_state[0][0] > max_pos:
+    max_pos = next_state[0][0]
+
+    # store experience in replay buffer
+    agent.store_experience(state, action, reward, next_state, done)
+    state = next_state
+    ep_reward += reward
+    t += 1
+
+    # train
+    if global_step_cnt % train_freq == 0:
+    agent.experience_replay()
+
+    # update target model
+    if global_step_cnt % copy_freq == 0:
+    agent.update_target_model(tau=tau)
+    if done and t < max_steps:
+    print('\nSuccessfully solved the problem in {} episodes. \   
+    max_pos:{:.2f}, steps: {}\n'.format(e, max_pos, t))
+    agent.save_model(wt_filename)
+
+    if t >= max_steps:
+    break
+    # episode ends here
+    car_positions.append(state[0][0])
+    scores.append(ep_reward)
+    avg_scores.append(np.mean(scores))
+    if filename is not None:
+    file.write(f'{e}\t{ep_reward}\t{np.mean(scores)}\
+    \t{max_pos}\t{t}\n' )
+    file.flush()
+    os.fsync(file.fileno()) # write to the file immediately
+    #print on console
+    print(f'\re:{e}, ep_reward: {ep_reward:.2f}, avg_ep_reward: \
+    {np.mean(scores):.2f}, ep_steps: {t}, max_pos: {max_pos:.2f}', end="")
+    sys.stdout.flush()
+    print('End of training')
+    file.close()    
+  \end{pygments}
+  \caption{Training function used for solving the Mountain Car
+  Problem.}
+  \label{lst:mc_train}
+\end{listing}
+
+\subsubsection{Main Code for creating and training agent}
+The main Python code for creating and training an agent is provided in
+the code Listing \ref{lst:mc_dqn_per}. An instance of gym environment
+for Mountain Car problem is created. A sequential deep network is
+created and passed to the \texttt{DQNPERAgent} and then the
+\texttt{train()} function is called. The corresponding console output
+is also shown in this list. The model training performance is shown in
+Figure \ref{fig:mc_dqn_per}. It is seen that the average episodic
+reward increases overtime. The problem is solved for episodes where
+the episodic reward reaches 200, car position reaches 0.5 in less than
+200 steps. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+    import matplotlib.pyplot as plt
+    import gymnasium as gym
+    import keras
+
+    # create a gym environment
+    env = gym.make('MountainCar-v0', render_mode='rgb_array')
+    obs_shape = env.observation_space.shape
+    action_shape = env.action_space.shape
+    n_actions = env.action_space.n
+    print('Observation shape: ', obs_shape)
+    print('Action shape: ', action_shape)
+    print('Action size: ', n_actions)
+    print('Max episodic steps: ', env.spec.max_episode_steps)
+
+    # Create a model
+    model = keras.Sequential([
+      keras.layers.Dense(30, input_shape=obs_shape, activation='relu'),
+      keras.layers.Dense(60, activation='relu'),
+      keras.layers.Dense(n_actions, activation='linear')
+    ])
+    model.compile(loss='mse',  \
+    optimizer=keras.optimizers.Adam(learning_rate=0.001))
+
+
+    # create a DQN PER Agent
+    agent = DQNPERAgent(obs_shape, n_actions,
+    buffer_size=20000,
+    batch_size=64,
+    model=model)
+
+    # train the agent
+    train(env, agent, max_episodes=200, copy_freq=200, \
+    filename='mc_dqn_per.txt') 
+  \end{pygments}
+  \begin{framed}
+    \begin{small}
+      \begin{verbatim}
+      e:10, ep_reward: 25.87, avg_ep_reward: 16.28, ep_steps: 200, max_pos: -0.08
+      Successfully solved the problem in 11 episodes. max_pos:0.53, steps: 138
+
+      e:11, ep_reward: 223.93, avg_ep_reward: 33.59, ep_steps: 138, max_pos: 0.53
+      Successfully solved the problem in 12 episodes. max_pos:0.51, steps: 152
+
+      e:13, ep_reward: 15.08, avg_ep_reward: 45.95, ep_steps: 200, max_pos: -0.05
+      Successfully solved the problem in 14 episodes. max_pos:0.50, steps: 174
+
+      e:14, ep_reward: 224.50, avg_ep_reward: 57.85, ep_steps: 174, max_pos: 0.50
+      Successfully solved the problem in 15 episodes. max_pos:0.52, steps: 163
+
+      e:16, ep_reward: 31.26, avg_ep_reward: 66.23, ep_steps: 200, max_pos: 0.252
+      Successfully solved the problem in 17 episodes. max_pos:0.54, steps: 159
+
+      e:17, ep_reward: 229.82, avg_ep_reward: 75.32, ep_steps: 159, max_pos: 0.54
+      Successfully solved the problem in 18 episodes. max_pos:0.51, steps: 136
+
+      e:18, ep_reward: 219.73, avg_ep_reward: 82.92, ep_steps: 136, max_pos: 0.51
+      Successfully solved the problem in 19 episodes. max_pos:0.51, steps: 145
+
+      e:19, ep_reward: 219.61, avg_ep_reward: 89.75, ep_steps: 145, max_pos: 0.51
+      Successfully solved the problem in 20 episodes. max_pos:0.51, steps: 150 
+      \end{verbatim}
+    \end{small}
+  \end{framed}
+  \caption{Solving the Mountain Car Problem with DQN and PER}
+  \label{lst:mc_dqn_per}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap05/mc_dqn_per.png}
+  \caption{Training performance of the DQN PER Agent used for solving
+    the Mountain Car Problem. The problem is considered solved if the
+    car position reaches 0.5, episodic reward reaches 200 in less than 200
+  steps.}
+  \label{fig:mc_dqn_per}
+\end{figure}
+
+\section{Solving Atari Games using DQN}     
+\index{Environment!Gym!Atari}
+The Atari 2600, also known as the Atari VCS, was a hugely popular game
+console released in 1977.  It helped usher in the home video game
+revolution\footnote{\url{https://en.wikipedia.org/wiki/Atari_2600}}.
+Atari environments are simulated via the Arcade Learning Environment
+(ALE) through the Stella emulator. You are required to install Atari
+ROMs separately to make atari environments using gymnasium. Please
+install the following packages on your system:
+
+\begin{mdframed}[backgroundcolor=black!10]
+  \begin{verbatim}
+  pip install gymnasium[atari]                                     
+  pip install gymnasium[accept-rom-license]
+  \end{verbatim}
+\end{mdframed}
+
+In atari environments, the observation is available in the form of
+color or grayscale images. The code listing \ref{lst:atari} shows how
+one can make a gym environment for \texttt{PacMan} atari game and
+visualize its observation. The corresponding observation in shown in
+Figure \ref{fig:pc_obs}. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+import matplotlib.pyplot as plt 
+import numpy as np
+# create an atari environment
+env = gym.make('ALE/MsPacman-v5', obs_type="grayscale", 
+               render_mode='rgb_array')
+obs_shape = env.observation_space.shape + (1,)
+print('shape of action space: ', env.action_space.n)
+print('shape of observation space: ', env.observation_space.shape)
+x = env.reset()[0]  # initialize environment and make observation
+print('shape of x: ', np.shape(x))
+plt.imshow(x)   # visualize observation
+plt.axis('off')
+print('obs_shape: ', obs_shape)
+print('Max Environment Steps:', env.spec.max_episode_steps)
+print('Observation space low: ', env.observation_space.low[0][0])
+print('Observation space high:', env.observation_space.high[0][0])
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+A.L.E: Arcade Learning Environment (version 0.8.1+53f58b7)
+[Powered by Stella]
+shape of action space:  9
+shape of observation space:  (210, 160)
+shape of x:  (210, 160)
+obs_shape:  (210, 160, 1)
+Max Environment Steps: None
+Observation space low:  0
+Observation space high: 255
+    \end{verbatim}
+  \end{framed}
+  \caption{Python code for creating an atari environment and
+  visualizing state observation.} 
+  \label{lst:atari}
+\end{listing}
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap05/atari-pacman.png}
+  \caption{A PacMan Atari Environment Observation}
+  \label{fig:pc_obs}
+\end{figure}
+
+\subsection{Image Stacking Wrapper}
+
+Observation images are stacked along the depth channel to incorporate
+temporal information into the training process. The code listing
+\ref{lst:stack_frames} provides python code for creating a wrapper
+class to stack frames in Gym environments. 
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+from collections import deque
+import gymnasium as gym
+from gym.spaces import Box
+
+class FrameStack(gym.Wrapper):
+    """
+    Wrapper that stacks observations from the environment 
+    into a single observation. This wrapper keeps a rolling buffer 
+    of the most recent frames and stacks them
+    together as a new observation.
+    """
+    def __init__(self, env, num_stacked_frames):
+        """
+        Args:
+          env: The environment to wrap.
+          num_stacked_frames: The number of frames to stack.
+        """
+        super(FrameStack, self).__init__(env)
+        self.num_stacked_frames = num_stacked_frames
+        self.frames = deque([], maxlen=num_stacked_frames)
+        obs_shape = env.observation_space.shape
+        if len(obs_shape) == 2: # convert (H, W) to (H, W, D)
+            obs_shape = obs_shape + (1,)
+        # Modify the observation space to accommodate stacked frames
+        self.observation_space = Box(
+            low=0, high=255,
+            shape=(obs_shape[0], obs_shape[1], 
+                     obs_shape[2] * self.num_stacked_frames),
+            dtype=self.env.observation_space.dtype
+        )
+
+    def reset(self):
+        """
+        Resets the environment and fills the frame buffer
+        with initial observations.
+        """
+        observation = self.env.reset()[0]
+        if len(np.shape(observation)) == 2: # convert (H, W) to (H, W, D)
+            observation = np.expand_dims(observation, axis=2) 
+        for _ in range(self.num_stacked_frames):
+            self.frames.append(observation)
+        return self._stack_frames()
+
+    def step(self, action):
+        """ Steps through the environment and stacks 
+            the new observation with previous ones.
+        """
+        observation, reward, done, info, _ = self.env.step(action)
+        if len(np.shape(observation)) == 2: # convert (H, W) to (H, W, D)
+            observation = np.expand_dims(observation, axis=2) 
+        self.frames.append(observation)
+        return self._stack_frames(), reward, done, info
+
+    def _stack_frames(self):
+        """ Stacks frames from the buffer into a single observation.
+        """
+        return np.concatenate(self.frames, axis=2)
+    
+  \end{pygments}
+  \caption{A wrapper class to stack frames in Gym environment }
+  \label{lst:stack_frames}
+\end{listing}
+
+\subsection{DQN Agent for Atari Environments}
+The code listing \ref{lst:dqn_atari} provides the
+\texttt{DQNAtariAgent} class definition
+for applying DQN algorithm to atari problems. It inherits attributes from
+both \texttt{DQNAgent} and \texttt{DQNPERAgent} classes defined
+earlier. The selection between these two agents is facilitated by the
+class attribute \texttt{self.per\_flag}. The class provides
+\texttt{preprocess()} method to resize input frames. It also includes
+a \texttt{train()} function to allow agent training on a given
+environment. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import cv2
+import sys
+
+class DQNAtariAgent(DQNPERAgent):
+    def __init__(self, obs_shape: tuple, n_actions: int,
+                        buffer_size=2000, batch_size=24,
+                        ddqn_flag=True, model=None, per_flag=True):
+        self.per_flag = per_flag
+        
+        if self.per_flag:
+            super().__init__(obs_shape, n_actions, buffer_size,
+                        batch_size, ddqn_flag, model)
+        else:
+            DQNAgent.__init__(self, obs_shape, n_actions, buffer_size, 
+                              batch_size, ddqn_flag, model)
+        
+    def experience_replay(self):
+        if self.per_flag:
+            super().experience_replay()
+        else:
+            DQNAgent.experience_replay(self)
+            
+
+    def preprocess(self, observation, x_crop=(1, 172), y_crop=None):
+        assert len(self.obs_shape) == 3, \
+                      "Observation must have 3 dimension (H, W, C)"
+        output_shape = self.obs_shape[:-1] # all but last (H, W)
+        # crop image
+        if x_crop is not None and y_crop is not None:
+            xlow, xhigh = x_crop
+            ylow, yhigh = y_crop
+            observation = observation[xlow:xhigh, ylow:yhigh]
+        elif x_crop is not None and y_crop is None:
+            xlow, xhigh = x_crop
+            observation = observation[xlow:xhigh, :]
+        elif x_crop is None and y_crop is not None:
+                ylow, yhigh = y_crop
+                observation = observation[:, ylow:yhigh]
+        else:
+            observation = observation
+            
+        # resize image
+        observation = cv2.resize(observation, output_shape)
+        
+        # normalize image
+        observation = observation / 255.  # normalize between 0 & 1
+        return observation
+            
+    def train(self, env, max_episodes=300, 
+          train_freq=1, copy_freq=1, filename=None, wtfile_prefix=None):
+    
+        if filename is not None:
+            file = open(filename, 'w')
+            
+        if wtfile_prefix is not None:
+            wt_filename = wtfile_prefix + '_best_model.weights.h5'
+        else:
+            wt_filename = 'best_model.weights.h5'
+
+        tau = 0.01 if copy_freq < 10 else 1.0
+
+        best_score, global_step_cnt = 0, 0
+        scores, avg_scores, avg100_scores = [], [], []
+        global_step_cnt = 0
+        for e in range(max_episodes):
+            state = env.reset() # with framestack wrapper
+            #state = env.reset()[0] # without framestack wrapper
+            state = self.preprocess(state)
+            state = np.expand_dims(state, axis=0)
+            done = False
+            ep_reward = 0
+            while not done:
+                global_step_cnt += 1
+                # take action
+                action = self.get_action(state)
+                # collect reward
+                next_state, reward, done, _ = env.step(action) 
+                next_state = self.preprocess(next_state) # (H, W, C)
+                next_state = np.expand_dims(next_state, axis=0) # (B, H, W, C)
+                # store experiences in eplay buffer
+                self.store_experience(state, action, reward, 
+                                          next_state, done)
+                state = next_state
+                ep_reward += reward
+                # train
+                if global_step_cnt % train_freq == 0:
+                    self.experience_replay()
+
+                # update target model
+                if global_step_cnt % copy_freq == 0:
+                    self.update_target_model(tau=tau)
+                # end of while-loop
+            if ep_reward > best_score:
+                self.save_model(wt_filename)
+                best_score = ep_reward
+            scores.append(ep_reward)
+            avg_scores.append(np.mean(scores))
+            avg100_scores.append(np.mean(scores[-100:]))
+            if filename is not None:
+                file.write(f'{e}\t{ep_reward}\t{np.mean(scores)}\
+                                 \t{np.mean(scores[-100:])}\n')
+                file.flush()
+                os.fsync(file.fileno())
+            print(f'\re:{e}, ep_reward: {ep_reward}, \
+                        avg_ep_reward: {np.mean(scores):.2f}', end="")
+            sys.stdout.flush()
+        # end of for loop
+        print('\nEnd of training')
+        if filename is not None:
+            file.close()
+  \end{pygments}
+  \caption{Python class for applying DQN algorithm to Atari
+  environments. It inherits attributes from DQN and DQNPERAgent}
+  \label{lst:dqn_atari}
+\end{listing}
+
+\subsection{Training agent on Atari PacMan Environment}
+\index{Environment!Gym!Atari!PacMan}
+The main code for creating and training a DQN agent for PacMan
+environment is provided in the code listing \ref{lst:dqn_pacman}. The
+wrapper class \texttt{FrameStack} is used to stack observation frames
+along the depth channel. A sequential model created externally is
+passed to the \texttt{DQNAtariAgent} for creating the Q network. The
+performance of DQN and DQN+PER algorithm for this environment is shown
+in Figure \ref{fig:pc_dqn_comp}. Both of these algorithms implement
+double DQN algorithm by default. It is seen in this figure that PER
+provides some improvement in training performance over the standard
+DQN algorithm. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+# create an instance of gym environment
+import gymnasium as gym
+env = gym.make('ALE/MsPacman-v5', obs_type="grayscale", 
+                              render_mode='rgb_array')
+
+# Stack the frames using Wrapper
+env = FrameStack(env, num_stacked_frames=4)
+print('observation shape: ', env.observation_space.shape)
+
+n_actions = env.action_space.n 
+print('Action space dimension: ', n_actions)
+
+# All images will be resized to this size
+obs_shape = (84, 84, 4) 
+
+# create a sequential model for Q Network
+model = keras.Sequential([
+      keras.layers.Conv2D(32, kernel_size=8, strides=4, padding='same',
+               activation='relu', kernel_initializer='he_uniform',
+                          input_shape=obs_shape),
+      keras.layers.MaxPooling2D(pool_size=(2,2)),
+      keras.layers.Conv2D(64, kernel_size=2, strides=1, padding='same',
+               activation='relu', kernel_initializer='he_uniform'),
+      keras.layers.MaxPooling2D(pool_size=(2,2)),
+      keras.layers.Flatten(),
+      keras.layers.Dense(128, activation='relu', 
+                        kernel_initializer='he_uniform'),
+      keras.layers.Dense(n_actions, activation='linear')
+  ])
+model.compile(loss='mse', optimizer="adam")
+
+# Create DQN PER Agent
+agent = DQNAtariAgent(obs_shape, n_actions, 
+                      buffer_size=60000,
+                      batch_size=64,  
+                      model=model, per_flag=True)
+# Train the agent
+agent.train(env, max_episodes=400, train_freq=5, 
+               copy_freq=50, filename='pacman_dqn_per.txt')
+  \end{pygments}
+  \caption{Python code for creating and training a DQN agent for Atari
+  PacMan environment.}
+  \label{lst:dqn_pacman}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap05/pacman_dqn_per.png}
+  \caption{Training performance of DQN and DQN+PER algorithm for
+  PacMan Environment}
+  \label{fig:pc_dqn_comp}
+\end{figure}
+
+\section{Summary}
+In this chapter, we saw how Q-learning algorithm could be extended to
+solve complex problems by using a deep network to approximate the Q
+function. This network can take any arbitrary observation input
+thereby greatly expanding the capabilities of DQN. Then we talked
+about several improvements to overcome the limitation of the standard
+DQN architecture. Some of these improvements include using an
+additional target Q network to stabilize the learning process and
+using experience replay to improve the training performance. Finally,
+we discussed priority experience replay that samples experiences based
+on their priorities. Finally, we demonstrate the performance of DQN
+architectures in solving several problems such as \texttt{CartPole},
+\texttt{MountainCar} and Atari problems. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

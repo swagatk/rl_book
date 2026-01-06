@@ -1,0 +1,2196 @@
+\chapter{Policy Gradient Methods} \label{chap:pgm}
+\index{Policy Gradient Methods}
+\section{Introduction}
+In the previous chapters, we saw how we can derive policy from the
+estimated Q-value function. Once the Q function is known, the optimal policy is
+derived greedily by using the following equation:
+ \begin{equation}
+ a^* = \arg\max_a Q(s,a)
+ \label{eq:q_greedy_policy}
+ \end{equation}
+ However, this approach can only be applied to problems with discrete
+ action spaces. In this chapter, we will look into policy gradient methods that can
+ learn the optimal policy without estimating the Q function and hence,
+ can be applied to solve problems having continuous action spaces. 
+
+
+ \section{Policy Gradient} \label{sec:pg}
+ We first define the policy function $\pi(a|s)$ as the probability of taking an action
+ $a$ in a given state $s$. Let us parameterize the policy function via
+ a parameter $\theta$ as $\pi(a|s;\theta)$ which will allow us to
+ estimate the optimal policy for a given state. In practice, we use a
+ neural network to approximate the policy function that takes state as
+ input and produces probability of each action as the output. The
+ parameters of this network is now updated in such a way that the
+ actions with higher expected rewards will have a higher probability
+ for a given input state. Hence, the objective function to be
+ maximized in a policy gradient method is the expected cumulative
+ future reward given by 
+ \begin{eqnarray}
+   J(\theta) = \mathbb{E}[\sum_{t=0}^{T-1}r_{t+1}] 
+   \label{eq:pg_obj}
+ \end{eqnarray}
+ where $r_{t+1}$ is the reward received by performing action
+ $a_t$ in the state $s_t$ and is given by the function 
+ \begin{equation}
+   r_{t+1} = R(s_t, a_t)
+   \label{eq:reward_func}
+ \end{equation}
+ The parameters of the policy function is now optimized by using 
+ \emph{gradient ascent} with the partial derivative of the objective
+ function with respect to the policy parameter $\theta$ as shown
+ below:
+\begin{equation}
+  \theta =  \theta + \alpha \frac{\partial}{\partial \theta}J(\theta)
+  =  \theta + \alpha \nabla_\theta J(\theta)
+  \label{eq:policy_update}
+\end{equation}
+where $\alpha$ is the learning rate that controls the amount of update
+at each iterative step.
+
+Now, we will derive the expression for the gradient term
+$\nabla_\theta J(\theta)$ which is required to update the policy
+parameters during the training process. 
+
+\subsection{Computing $\nabla_\theta J(\theta)$}
+
+The expected value or mean value of a random variable $x$ is computed
+by the summation of the product of every value of $x$ and its
+probability given by:
+\begin{equation}
+  \mathbb{E}[f(x)] = \sum_x P(x) f(x)
+  \label{eq:mean}
+\end{equation}
+
+Therefore the objective function in \eqref{eq:pg_obj} can be expanded
+as given below:
+\begin{equation}
+  \displaystyle J(\theta) = \mathbb{E}_{\tau \sim \pi(\theta)} [ \sum_{t=0}^{T-1} r_{t+1}|\pi_{\theta}]
+  = \sum_\tau  \sum_{t=0}^{T-1} P(s_t, a_t|\tau) r_{t+1}
+  \label{eq:pg_obj_expanded}
+\end{equation}
+where $P(s_t, a_t|\tau)$ is the probability of occurrence of
+$(s_t, a_t)$ given the trajectory $\tau$. 
+
+Differentiating both sides of the above equation with respect to
+policy parameter $\theta$ and using the formula $\frac{d}{dx}\log
+f(x)=\frac{f'(x)}{f(x)}$, we get 
+
+\begin{eqnarray}
+  \displaystyle
+\nabla_\theta J(\theta) & =& \displaystyle \sum_\tau \sum_{t=0}^{T-1}
+\nabla_\theta P(s_t,a_t|\tau) r_{t+1} =\sum_\tau \sum_{t=0}^{T-1}
+P(s_t,a_t|\tau) \frac{\nabla_\theta P(s_t,a_t|\tau)}{P(s_t,a_t|\tau)}
+r_{t+1} \nonumber \\
+&=&  \sum_\tau \sum_{t=0}^{T-1} P(s_t,a_t|\tau) \nabla_\theta \log
+P(s_t,a_t|\tau) r_{t+1} \nonumber\\
+&=& \mathbb{E}_{\pi(\theta) \sim \tau}[\sum_{t=0}^{T-1} \nabla_\theta \log P(s_t,a_t|\tau) r_{t+1}]
+\label{eq:p_grad_1}
+\end{eqnarray}
+
+During the training, random samples of episodes are used instead of
+computing the expectation. Therefore, we can make use of the following
+expression:
+\begin{equation}
+  \nabla_\theta J(\theta) \approx \displaystyle \frac{1}{N}\sum_{i=1}^N \sum_{t=0}^{T-1} \nabla_\theta \log P(s_t,a_t|\tau) r_{t+1}
+  \label{eq:p_grad_2}
+\end{equation}
+where $N$ represents the number of samples used for each training
+step.
+
+Probability of being at any state depends on all previous states and
+actions in a trajectory under a given policy $\pi_\theta$. Therefore,
+by definition, we have
+\begin{eqnarray}
+  \displaystyle
+P(s_t,a_t|\tau) & =& P(s_0,a_0, s_1, a_1, \dots, s_{t-1}, a_{t-1},
+s_t,  a_t| \pi_{\theta}) \nonumber \\
+&=& P(s_0)\pi_{\theta}(a_0|s_0)P(s_1|s_0,a_0)\pi_\theta(a_1|s_1)
+P(s_2|s_1,a_1)\pi_\theta(a_2|s_2) \nonumber \\
+& & \ldots
+P(s_{t-1}|s_{t-2},a_{t-2})\pi_\theta(a_{t-1}|s_{t-1})P(s_t|s_{t-1},a_{t-1})\pi_\theta(a_t|s_t)\nonumber
+\\
+&=& P(s_0)\pi_\theta(a_0|s_0)\Pi_{i=1}^t P(s_i|s_{i-1}, a_{i-1})\pi_\theta(a_i|s_i)
+\label{eq:prob_state}
+\end{eqnarray}
+
+Taking log on both sides, we get
+\begin{align}
+\log P(s_t,a_t|\tau) 
+&= \log P(s_0)+ \log \pi_{\theta}(a_0|s_0)+ \log P(s_1|s_0,a_0) + \log
+\pi_\theta(a_1|s_1)  \nonumber \\
+&  +\log P(s_2|s_1,a_1) + \log \pi_\theta(a_2|s_2) + \ldots + \log
+P(s_{t-1}|s_{t-2},a_{t-2}) \nonumber \\
+&+ \log \pi_\theta(a_{t-1}|s_{t-1}) + \log P(s_t|s_{t-1},a_{t-1}) + \log \pi_\theta(a_t|s_t)
+\end{align}
+
+Differentiating both sides with respect to policy parameter $\theta$,
+we get
+\begin{align}
+\nabla_\theta P(s_t,a_t|\tau) & = 0 + \nabla_\theta \log \pi_{\theta}(a_0|s_0)+ 0 + \nabla_\theta \log \pi_\theta(a_1|s_1)  
++ 0 + \nabla_\theta \log \pi_\theta(a_2|s_2)  \nonumber \\
+& + \ldots  + 0 + \nabla_\theta \log \pi_\theta(a_{t-1}|s_{t-1}) + 0 +
+\nabla_\theta \log \pi_\theta(a_t|s_t) \nonumber \\
+& = \sum_{t'=0}^t \nabla_\theta \log \pi_\theta(a_{t'}|s_{t'})
+\label{eq:grad_p}
+\end{align}
+
+In the above equation, we used the fact that $P(s_t|s_{t-1},
+a_{t-1})$ is not dependent on the policy parameter $\theta$ and is
+solely dependent on the environment.
+
+Now substituting equation \eqref{eq:grad_p} into \eqref{eq:p_grad_2},
+we get 
+\begin{align}
+  \nabla_\theta J(\theta) &= \frac{1}{N}\sum_{i=1}^N \sum_{t=0}^{T-1}
+  r_{t+1} \nabla_\theta P(s_t,a_t|\tau) = \frac{1}{N}\sum_{i=1}^N \sum_{t=0}^{T-1}r_{t+1} \left(\sum_{t'=0}^t \nabla_\theta \log \pi_\theta(a_{t'}|s_{t'})\right)
+\label{eq:p_grad_3}
+\end{align}
+
+The inner term can be expanded as shown below:
+
+\begin{align}
+ \sum_{t=0}^{T-1}r_{t+1} \left(\sum_{t'=0}^t \nabla_\theta \log
+ \pi_\theta(a_{t'}|s_{t'})\right) = \displaystyle r_1 \left(\sum_{t'=0}^0
+\nabla_\theta \log \pi_\theta(a_{t'}|s_{t'})\right) +  
+r_2  \left(\sum_{t'=0}^1 \nabla_\theta \log
+\pi_\theta(a_{t'}|s_{t'})\right) + \nonumber \\
+r_3 \left(\sum_{t'=0}^2 \nabla_\theta \log
+\pi_\theta(a_{t'}|s_{t'})\right) + \ldots + r_T
+\left(\sum_{t'=0}^{T-1} \nabla_\theta \log
+\pi_\theta(a_{t'}|s_{t'})\right) \nonumber \\
+ = r_1 \nabla_\theta \log \pi_\theta(a_0|s_0) + r_2( \nabla_\theta
+\log \pi_\theta(a_0|s_0) + \nabla_\theta \log \pi_\theta(a_1|s_1))
+\nonumber \\
+  + \ldots +  r_T( \nabla_\theta \log \pi_\theta(a_0|s_0) +
+  \nabla_\theta \log \pi_\theta(a_1|s_1) + \ldots + \nabla_\theta \log
+  \pi_\theta(a_{T-1}|s_{T-1}))  \nonumber \\
+ = \nabla_\theta \log \pi_\theta(a_0|s_0) (r_1+r_2+\ldots r_T)
++\nabla_\theta \log \pi_\theta(a_1|s_1) (r_2+r_3+\ldots r_T) \nonumber \\
++  \nabla_\theta \log \pi_\theta(a_2|s_2) (r_3+r_4+\ldots+r_T) +
+\ldots + \nabla_\theta \log \pi_\theta(a_{T-1}|s_{T-1})r_T \nonumber \\
+  = \sum_{t=0}^{T-1}\nabla_\theta \log \pi_\theta(a_t|s_t) \left(\sum_{t'=t+1}^T r_{t'}\right) 
+\end{align}
+Therefore, the policy gradient term can be written as 
+\begin{align}
+\nabla_\theta J(\theta) 
+= \frac{1}{N}\sum_{i=1}^N\sum_{t=0}^{T-1}\nabla_\theta \log
+\pi_\theta(a_t|s_t) \left(\sum_{t'=t+1}^T r_{t'}\right)
+=\frac{1}{N}\sum_{i=1}^N \sum_{t=0}^{T-1}\nabla_\theta \log \pi_\theta(a_t|s_t) G_t 
+\end{align}
+where $G_t = \sum_{t'=t+1}^T$ is the sum of future rewards. By
+incorporating discounting factory $\gamma \in [0, 1]$ into our
+objective function, we can rewrite \eqref{eq:pg_obj} as follows:
+\begin{equation}
+  J(\theta) = \mathbb{E}[\sum_{t=0}^{T-1} \gamma^tr_{t+1}|\pi_\theta]
+  \label{eq:pg_obj_wg}
+\end{equation}
+
+This will lead to the policy gradient as follows:
+\begin{equation}
+\nabla_\theta J(\theta) = \displaystyle \sum_{t=0}^{T-1} \nabla_\theta
+\log \pi_\theta(a_t|s_t) \left(\sum_{t'=t+1}^T
+\gamma^{t'-1}r_{t'}\right) = \sum_{t=0}^{T-1} \nabla_\theta \log
+\pi_\theta(a_t|s_t)G_t
+\label{eq:pg_wg}
+\end{equation}
+where 
+\begin{equation}
+ G_t=\sum_{t'=t+1}^T \gamma^{t'-1}r_{t'} 
+  \label{eq:pg_return}
+\end{equation}
+is the sum of discounted future rewards also known as the return. 
+From chapter \ref{chap:mdp}, we know that the expected value of
+cumulative future reward is also called the Q function $Q(s_t, a_t)$
+(see equation \eqref{eq:q_func}). Thus, we can rewrite the policy
+gradient equation \eqref{eq:pg_wg} as:
+\begin{equation}
+  \nabla_\theta J(\theta) \approx \frac{1}{N}\sum_{i=1}^N \sum_{t=1}^T
+  \nabla_\theta \log \pi_\theta(a_{i,t}|s_{i,t}) Q(s_{i,t}, a_{i,t})
+  \label{eq:pg_wq}
+\end{equation}
+
+We can always subtract a term to the optimization problem as long as
+the term is not related to $\theta$. So instead of using the total
+reward, we can subtract it with $V(s)$. This will lead to the
+following expression for policy gradient in terms of the advantage
+function:
+\begin{eqnarray}
+  \nabla_\theta J(\theta) &\approx& \frac{1}{N}\sum_{i=1}^N \sum_{t=1}^T
+  \nabla_\theta \log \pi_\theta(a_{i,t}|s_{i,t}) [Q(s_{i,t}, 
+  a_{i,t})- V(s)] \nonumber \\
+ &\approx& \frac{1}{N}\sum_{i=1}^N \sum_{t=1}^T
+ \nabla_\theta \log \pi_\theta(a_{i,t}|s_{i,t}) A(s_{i,t}, a_{i,t})
+  \label{eq:pg_wa}
+\end{eqnarray}
+
+We
+will now use the above equations to develop a policy gradient
+algorithm to learn the optimal policy.
+
+
+\section{Monte-Carlo Policy Gradient Algorithm} \label{sec:mcpga}
+\index{Monte-Carlo Policy Gradient}
+\index{Policy Gradient Methods!REINFORCE}
+Monte-Carlo Policy Gradient algorithm, also known as REINFORCE, uses
+return obtained from each episode of samples to update the
+policy parameter $\theta$. In other words, it updates the policy
+parameter after every episode.  The policy network $\pi_\theta$ takes
+states as input and outputs probabilities for all actions. The policy
+gradient use gradient ascent to adjust the weights. This will
+encourage the policy network to take better actions. The steps
+involved are as follows:
+
+\begin{enumerate}
+  \item Initialize the policy parameter $\theta$ at random.
+  \item Generate a trajectory using the policy $\pi_\theta$:
+    \[\{\tau: s_0, a_0, r_1, s_1, a_1, r_2, s_2,a_2,r_3,\ldots,
+    S_{T-1}\} \]
+    \item for $t = 0, 1, 2, \cdots T-1$:
+      \begin{enumerate}
+        \item Estimate the return $G_t$ by using \eqref{eq:pg_return}.
+        \item Update the policy parameter:
+          \begin{equation}
+            \theta \leftarrow \theta + \alpha
+            G_t\nabla_\theta\log\pi_\theta(a_t|s_t)
+            \label{eq:pg_update_2}
+          \end{equation}
+      \end{enumerate}
+\end{enumerate}
+
+\subsection{Python Code for REINFORCE Algorithm}
+The implementation involves two steps - first creating a policy
+network and then implement the Monte-Carlo Policy Gradient algorithm
+as described above. The code for creating a policy network is
+provided in Listing \ref{lst:policy_net}.  It takes state as input and
+outputs probabilities of all actions. The code for implementing
+REINFORCE Algorithm is provided in Listing \ref{lst:pg_mc}. The method
+\texttt{calculate\_return()} computes the cumulative discounted
+rewards for each episode. The \texttt{choose\_action} method samples
+an action based on the action probabilities obtained using the policy
+network. The \texttt{train()} method updates the policy parameters
+using gradient ascent by using equation \eqref{eq:pg_update_2}. The
+buffers for storing transitions are cleared after each training step.
+The code for solving a Gym problem environment with this agent is
+provided in the code listing \ref{lst:train_env}. It involves
+generating action using \texttt{agent.choose\_action()} method and
+storing transitions in a buffer using
+\texttt{agent.store\_transitions()} method. Finally, the agent is
+trained after each episode using \texttt{agent.train()} method.
+ 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import tensorflow as tf
+class PolicyNetwork():
+    def __init__(self, obs_shape, n_actions, lr=0.0001, 
+                        fc1_dim=256, fc2_dim=256):
+        self.fc1_dim = fc1_dim
+        self.fc2_dim = fc2_dim
+        self.n_actions = n_actions
+        self.obs_shape = obs_shape
+        self.lr = lr
+        self.model = self._build_model()
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
+        
+    def _build_model(self):
+        inputs = tf.keras.layers.Input(shape=self.obs_shape)
+        fc1 = tf.keras.layers.Dense(self.fc1_dim, 
+                              activation='relu')(inputs)
+        fc2 = tf.keras.layers.Dense(self.fc2_dim, 
+                              activation='relu')(fc1)
+        outputs = tf.keras.layers.Dense(self.n_actions, 
+                              activation='softmax')(fc2)
+        model = tf.keras.models.Model(inputs, outputs, 
+                              name='policy_network')
+        model.summary()
+        return model
+        
+    def __call__(self, state):
+        pi = self.model(state)
+        return pi
+  \end{pygments}
+  \caption{Python code for creating Policy Network}
+  \label{lst:policy_net}
+\end{listing}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import tensorflow as tf
+import tensorflow_probability as tfp
+import numpy as np
+class REINFORCEAgent:
+    def __init__(self, obs_shape, n_actions, alpha=0.0005, gamma=0.99):
+        self.gamma = gamma
+        self.lr = alpha
+        self.n_actions = n_actions
+        self.states = []
+        self.actions = []
+        self.rewards = []
+        self.obs_shape = obs_shape
+        # create policy network
+        self.policy = PolicyNetwork(obs_shape, n_actions, lr=self.alpha)
+            
+    def choose_action(self, obs):
+        state = tf.convert_to_tensor(obs, dtype=tf.float32)
+        probs = self.policy(state)
+        action_probs = tfp.distributions.Categorical(probs=probs)
+        action = action_probs.sample()
+        return action.numpy()[0]
+    
+    def store_transitions(self, state, action, reward):
+        self.states.append(state)
+        self.actions.append(action)
+        self.rewards.append(reward)
+        
+    def calculate_return(self, rewards):
+        G = np.zeros_like(rewards)
+        for t in range(len(rewards)):
+            G_sum = 0
+            for k in range(t, len(rewards)):
+                G_sum += rewards[k] * self.gamma
+            G[t] = G_sum
+        return G
+    
+    def train(self):
+        actions = tf.convert_to_tensor(self.actions, dtype=tf.float32)
+        rewards = np.array(self.rewards)
+        # compute returns
+        G = self.calculate_return(rewards)
+        # optimize with gradient ascent
+        with tf.GradientTape() as tape:
+            loss = 0
+            for idx, (g, state) in enumerate(zip(G, self.states)):
+                state = tf.convert_to_tensor(state, dtype=tf.float32)
+                probs = self.policy(state)
+                action_probs = tfp.distributions.Categorical(probs=probs)
+                log_prob = action_probs.log_prob(actions[idx])
+                loss += -g * tf.squeeze(log_prob)
+        trainable_params = self.policy.model.trainable_variables
+        gradient = tape.gradient(loss,  trainable_params)
+        self.policy.optimizer.apply_gradients(zip(gradient, \
+                                             trainable_params))
+        # empty the buffer
+        self.states = []
+        self.actions = []
+        self.rewards = []
+  \end{pygments}
+  \caption{Python Code for REINFORCE Algorithm.}
+  \label{lst:pg_mc}
+\end{listing}
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import os
+import gymnasium as gym
+def train_agent_for_env(env, agent, max_episodes=1000):
+    scores, avgscores, avg100scores = [], [], []
+    for e in range(max_episodes):
+        done = False
+        score = 0
+        state = env.reset()[0]
+        state = np.expand_dims(state, axis=0)
+        while not done:
+            action = agent.choose_action(state)
+            next_state, reward, done, _, _ = env.step(action)
+            next_state = np.expand_dims(next_state, axis=0)
+            agent.store_transitions(state, action, reward)
+            score += reward
+            state = next_state
+        # end of while loop
+        # train the agent at the end of each episode
+        agent.train()
+        scores.append(score)
+        avgscores.append(np.mean(scores))
+        avg100scores.append(np.mean(scores[-100:]))
+        if e % 100== 0:
+            print('episode:{}, score: {:.2f}, avgscore: {:.2f}, \
+               avg100score: {:.2f}'.format(e, score, \
+                  np.mean(scores), np.mean(scores[-100:])))
+    # end of for-loop
+    file.close()
+  \end{pygments}
+  \caption{Code for training a monte carlo policy gradient agent on a
+  given Gym environment.}
+  \label{lst:train_env}
+\end{listing}
+
+\subsection{Solving CartPole Problem} \label{pg_cp}
+The performance of the REINFORCE algorithm in solving the
+\texttt{CartPole-v0} is shown in Figure \ref{fig:pg_cp}. It shows the
+plot average episodic score and average score of last 100 episodes
+respectively. It can be seen that the problem is solved in about 700
+episodes. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+# instantiate a gym environment
+env = gym.make('CartPole-v0')
+obs_shape = env.observation_space.shape
+action_size = env.action_space.n 
+print('Observation shape: ', obs_shape)
+print('Action Size: ', action_size)
+print('Max Episode steps: ', env.spec.max_episode_steps)
+# create an RL agent
+agent = REINFORCEAgent(obs_shape, action_size)
+# train the RL agent on
+train_agent_for_env(env, agent, max_episodes=2000)
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+Output:
+episode:0, score: 39.00, avgscore: 39.00, avg100score: 39.00
+episode:100, score: 52.00, avgscore: 31.43, avg100score: 31.35
+episode:200, score: 19.00, avgscore: 41.33, avg100score: 51.33
+episode:300, score: 50.00, avgscore: 63.00, avg100score: 106.57
+episode:400, score: 260.00, avgscore: 97.96, avg100score: 203.18
+episode:500, score: 368.00, avgscore: 135.60, avg100score: 286.55
+episode:600, score: 415.00, avgscore: 191.58, avg100score: 472.00
+episode:700, score: 1184.00, avgscore: 360.26, avg100score: 1374.06
+    \end{verbatim}
+  \end{framed}  
+  \caption{Solving \texttt{CartPole-v0} environment using REINFORCE
+agent.}
+\label{lst:pg_cp}
+\end{listing}
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap06/cp_reinforce.png}
+  \caption{Performance of REINFORCE algorithm on \texttt{Cartpole-v0}
+environment. It shows average episodic score and average score of last
+100 episodes as training progresses.}
+  \label{fig:pg_cp}
+\end{figure}
+
+\subsection{Solving Lunar-Lander Problem}
+\index{Environment!Gym!LunarLander}
+This environment is a classic rocket trajectory optimization problem.
+The problem involves controlling firing of three engines (left, right
+and the main) to ensure smooth landing on the landing pad.  The code
+listing \ref{lst:ll_mcpg} shows how we can apply REINFORCE algorithm
+to solve the Gym's Lunar-Lander problem.  A few snapshots of the problem
+environment is shown in Figure \ref{fig:ll_img}. The performance of
+REINFORCE algorithm on the \texttt{LunarLander-v2} environment is
+shown in Figure \ref{fig:ll_mcpg}. We see the average score of last
+100 episodes increase from -118 to about 100 in about 4000 episodes. 
+
+\begin{figure}[!t]
+  \centering
+  \begin{tabular}{ccc}
+  \includegraphics[scale=0.23]{./figures/chap06/ll_f30.png} & 
+  \includegraphics[scale=0.25]{./figures/chap06/ll_f70.png} &
+  \includegraphics[scale=0.25]{./figures/chap06/ll_f157.png} \\
+  (a) & (b) & (c)
+\end{tabular}
+  \caption{A few snapshots of Lunar-Lander environment. }
+  \label{fig:ll_img}
+\end{figure}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+env = gym.make("LunarLander-v2", continuous=False)
+obs_shape = env.observation_space.shape
+action_size = env.action_space.n
+# create a RL agent
+agent = REINFORCEAgent2(obs_shape, action_size)
+# Train for the environment
+train_agent_for_env(env, agent, max_episodes=4000)    
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+    Output: 
+episode:0, score: -118.37, avgscore: -118.37, avg100score: -118.37
+episode:100, score: -89.99, avgscore: -158.09, avg100score: -158.49
+episode:200, score: -108.09, avgscore: -146.92, avg100score: -135.63
+episode:300, score: -103.37, avgscore: -142.65, avg100score: -134.06
+episode:400, score: -240.33, avgscore: -140.28, avg100score: -133.16
+episode:500, score: -101.36, avgscore: -135.14, avg100score: -114.54
+...
+...
+episode:3300, score: 145.25, avgscore: -27.09, avg100score: 56.75
+episode:3400, score: 12.40, avgscore: -24.93, avg100score: 46.65
+episode:3500, score: -244.25, avgscore: -22.19, avg100score: 70.81
+episode:3600, score: -207.85, avgscore: -19.61, avg100score: 70.74
+episode:3700, score: 10.10, avgscore: -17.33, avg100score: 64.76
+episode:3800, score: 34.17, avgscore: -15.91, avg100score: 36.53
+episode:3900, score: 237.00, avgscore: -12.92, avg100score: 101.05
+    \end{verbatim}
+  \end{framed}
+  \caption{Applying REINFORCE agent to solve Lunar-Lander Problem.}
+  \label{lst:ll_mcpg}                        
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap06/ll_reinforce.png}
+  \caption{Performance of REINFORCE algorithm on
+    \texttt{LunarLander-v2} problem. The problem is considered solved
+  if episodic score exceeds 200.}
+  \label{fig:ll_mcpg}
+\end{figure}
+
+\section{Actor-Critic Model} \label{sec:ac_model}
+\index{Actor-Critic Architecture}
+In the Monte-Carlo Policy Gradient Methods, one has to wait till the
+end of the episode to compute the \emph{return} $G(t)$ required for
+computing policy parameter update as given by equation
+\eqref{eq:pg_update_2}. If we have a high return, all the actions
+taken for an entire episode are considered good even if some actions
+were bad. As a consequence, a lot of samples are required to learn the
+optimal policy. 
+
+Rather than waiting till the end of the episode to compute an update,
+it will be better to update policy parameters at each time step by
+using an estimation of the Q function $Q(s,a)$ instead of the return
+$G(t)$ in equation \eqref{eq:pg_update_2}.  This will lead to the
+following policy parameter update equation:
+
+\begin{equation}
+  \Delta\theta = \alpha\nabla_\theta(\log \pi_\theta(a|s))Q_\phi(s,a)
+  \label{eq:ac_pu}
+\end{equation}
+
+Hence, two different networks are required, one for estimating policy
+and other for estimating value or Q function. This is known as the
+actor-critic architecture which combines policy gradient methods and
+value-based methods that we covered in the previous chapter. In this
+architecture, an \emph{actor} network is used to learn the policy
+function $\mu_\theta(s)$ where as a \emph{critic} network is used to
+learn the state value function $V_\phi(s)$ or Q function
+$Q_\phi(s,a)$. So, while the actor's role is decide best action for
+the agent, the critic's role is to evaluate the action produced by the
+actor. The actor-critic architecture allows one to implement separate
+training algorithms for the actor and the critic networks and hence,
+provides greater flexibility compared to other models.  The critic is
+a DQN that learns by minimizing the time-delay (TD) error. The actor
+network, on the other hand, learns the optimal action by using the
+update policy gradient method provided in equation \eqref{eq:ac_pu}
+which essentially tries to maximizing the critic output. A
+schematic diagram of the actor-critic architecture is shown in Figure
+\ref{fig:ac_diag}. We will discuss DDPG algorithm that will make use
+of this architecture in the next section.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.4]{./figures/chap06/ac_diag.png}
+  \caption{Actor-Critic Architecture}
+  \label{fig:ac_diag}
+\end{figure}
+
+\section{Deep Deterministic Policy Gradient} \label{sec:ddpg}
+\index{Deep Deterministic Policy Gradient
+(DDPG)}
+Deep Deterministic Policy Gradient (DDPG) algorithm
+\cite{lillicrap2015continuous} concurrently learns a Q-function and a
+policy. It uses off-policy data and the Bellman equation to learn the
+Q function and then learns a policy by maximizing the Qfunction through
+a gradient ascent algorithm. This allows DDPG to apply deep Q-learning
+to continuous action spaces. We will use the actor-critic architecture
+to implement this algorithm. The actor network represented by
+$\mu(s;\theta)$ takes state as input and gives out action and
+$\theta$ is the actor network weights. The critic network
+represented by $Q(s,a;\phi)$ takes state and action as input and
+returns Q value and $\phi$ is the critic network weights. Similarly,
+we define target network for both the actor network and critic network
+as $\mu(s;\theta_{\text{targ}})$ and $Q(s,a;\phi_{\text{targ}})$
+respectively, where $\theta_{\text{targ}}$ and $\phi_{\text{targ}}$ are target network
+parameters. 
+
+The critic network learns by using Q-learning algorithm where the
+following mean squared bellman error (MBSE) loss is minimized with stochastic
+gradient descent:
+\begin{eqnarray} L(\phi, \mathscr{D}) &=& \mathbb{E}_{(s,a,r,s',d)\sim
+    \mathscr{D}}\biggl[ \biggl( Q_\phi(s,a) -  
+      (r + \gamma(1-d)Q_{\phi_{\text{targ}}}(s',
+  \mu_{\theta_{\text{targ}}}(s')))\biggr)^2\biggr] \nonumber \\
+  &=&  \mathbb{E}_{(s,a,r,s',d)\sim \mathscr{D}} [ Q_\phi(s,a) - y(r,s',d)]
+  \label{eq:ddpg_qloss}
+\end{eqnarray}
+where $\mu_{\theta_{\text{targ}}}$ is the target policy,
+$Q_{\phi_{\text{targ}}}$ is the target Q network and $y(r,s',d)$ is
+the target critic value required for training the Q network.
+$\mathscr{D}$ denotes the experience replay buffer to store
+experiences.
+
+The policy learning in DDPG aims at learning a deterministic policy
+$\mu_\theta(s)$ which gives action that maximizes $Q_\phi(s,a)$. Since
+the action space is continuous, it is assumed that the Q function is
+differentiable with respect to action. It is to be noted that the symbol
+$\mu_\theta$ is used to represent the \emph{deterministic policy}
+which corresponds to the mean of the stochastic policy
+$\pi_\theta$. The policy parameters $\theta$ are updated by performing gradient
+ascent to solve the following optimization problem:
+\begin{equation}
+  \max_\theta \mathbb{E}_{s\sim\mathscr{D}} [Q_\phi(s, \mu_\theta(s))]
+  \label{eq:ddpg_po}
+\end{equation}
+
+ The parameters of the target networks are updated slowly compared to
+ the main network by using Polyak Averaging \cite{polyak1992acceleration} as shown below:
+\begin{eqnarray}
+  \phi_{\text{targ}} &\leftarrow& \rho\phi_{\text{targ}} + (1-\rho)\phi \nonumber \\
+  \theta_{\text{targ}} &\leftarrow& \theta \phi_{\text{targ}} + (1-\rho)\theta \nonumber
+  \label{eq:pa}
+\end{eqnarray}
+where $0\le \rho \le 1$ is a hyper parameter. It uses a
+hyper-parameter $\tau$ to slow down the update of target network
+weights compared to the main network. The pseudocode for DDPG
+algorithm is provided in the Algorithm \ref{alg:ddpg}. The
+experiences to be stored in the replay buffer $\mathscr{D}$ is
+generated by adding a noise to policy network's output. The DDPG
+agent samples a batch of experiences from the replay buffer and uses
+it to train the actor and critic networks. As explained above, the
+actor implements gradient ascent algorithm by using a negative of the
+gradient term computed using Tensorflow's `\texttt{GradientTape}'
+utility. The critic, on the other hand, learns by applying gradient
+descent to minimize the time-delay Q-function error. 
+
+\begin{algorithm}[htbp]
+  \caption{DDPG Algorithm}
+  \label{alg:ddpg}
+  \begin{algorithmic}[1]
+    \State input: initial policy parameter $\theta$, initial Q-function parameters $\phi$, empty replay buffer $\mathscr{D}$.
+    \State set target parameters equal to the main parameters:
+    $\theta_{\text{targ}}\leftarrow \theta$,
+    $\phi_{\text{targ}}\leftarrow \phi$. 
+    \Repeat
+    \State Observe state $s$ and select action
+    $a=\text{clip}(\pi_\theta(s)+\epsilon, a_{Low}, a_{High})$, where
+    $\epsilon \sim \mathscr{N}$. 
+    \State Execute the action $a$ in the environment and obtain next
+    state $s'$, reward $r$, done signal $d$ to indicate if it is a
+    terminal state. 
+    \State Store $(s,a,r,s',d)$ in the replay buffer $\mathscr{D}$
+    \State if $s'$ is terminal, reset the environment.
+    \If {it's time to update}
+    \For {for a certain number of steps}
+    \State Randomly sample a batch of transitions $B={(s,a,r,s',d)}$ from $\mathscr{D}$.
+    \State Compute targets: $y(r,s',d) = r + \gamma (1-d)Q_{\phi_\text{targ}}(s', \pi_{\theta_\text{target}}(s'))$
+    \State Update Q function by applying one step of gradient descent using
+    $ \nabla_\phi \frac{1}{|B|}\sum_{(s,a,r,s',d) \in B}(Q_\phi(s,a) - y(r,s',d))^2$ 
+    \State Update policy by one step of gradient ascent using
+    $ \nabla_\theta \frac{1}{|B|}\sum_{s\in B} Q_\phi(s,\pi_\theta(s))$
+    \State Update target networks using Polyak Averaging given by equations \eqref{eq:pa}
+    \EndFor
+    \EndIf
+    \Until convergence
+  \end{algorithmic}
+\end{algorithm}
+
+\subsection{Python Implementation of DDPG algorithm} 
+The first step is to create a class to generate noise that can be
+added to the deterministic action generated by the neural network
+model. This is shown in the code listing \ref{lst:action_noise}. It
+uses the Ornstein-Uhlenbeck process \cite{maller2009ornstein}.  The
+next step involves creating a buffer class for storing experiences. We
+will use the same buffer class \ref{lst:replay_buffer} that was used
+with DQN in the previous chapter. The next two steps involves creating
+actor and critic classes as will discussed in the following subsections.
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class OUActionNoise:
+    def __init__(self, mean, std_deviation, theta=0.15, 
+                              dt=1e-2, x_initial=None):
+        self.theta = theta
+        self.mean = mean
+        self.std_dev = std_deviation
+        self.dt = dt
+        self.x_initial = x_initial
+        self.reset()
+
+    def __call__(self):
+        x = (
+            self.x_prev
+            + self.theta * (self.mean - self.x_prev) * self.dt
+            + self.std_dev * np.sqrt(self.dt) * \
+                     np.random.normal(size=self.mean.shape)
+        )
+        # Store x into x_prev
+        # Makes next noise dependent on current one
+        self.x_prev = x
+        return x
+
+    def reset(self):
+        if self.x_initial is not None:
+            self.x_prev = self.x_initial
+        else:
+            self.x_prev = np.zeros_like(self.mean)
+    
+  \end{pygments}
+  \caption{Python Code for creating class for generating action noise
+    using Ornstein-Uhlenbeck process \cite{maller2009ornstein}.}
+    \label{lst:action_noise}
+\end{listing}
+
+\subsubsection{Actor Model}
+The python code for creating an actor class is provided in the listing
+\ref{lst:ddpg_actor}. The actor class uses a deep network to estimate
+deterministic actions ($\mu_\theta(s)$) from a given input state. It
+uses a \texttt{'tanh'} activation function to limit the action output in the
+range of [-1, 1] which is then scaled to the actual output range as
+required for a given problem.  Following our understanding from DDQN
+architecture discussed in section \ref{sec:ddqn}, actor class uses a
+target network to provide training stability. It uses policy gradient
+method to maximize the critic output which estimates the Q function.
+The negative sign associated with the loss function indicates that we
+are applying gradient \emph{ascent} to maximize the objective
+function. A separate deep network model could also be passed on as an
+argument to the class constructor if required. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class Actor():
+    def __init__(self, obs_shape, action_size,
+                 learning_rate=0.0003, 
+                 action_upper_bound=1.0,
+                model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.lr = learning_rate
+        self.action_upper_bound = action_upper_bound
+        if model is None:
+            self.model = self._build_model()
+            self.target = self._build_model()
+        else:
+            self.model = model 
+            self.target = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam()
+        # target shares same weights as the primary model in the beginning
+        self.target.set_weights(self.model.get_weights())
+        
+    def _build_model(self):
+        initializer = tf.keras.initializers.RandomUniform(
+                                    minval=-0.01, maxval=0.01)
+        s_input = tf.keras.layers.Input(shape=self.obs_shape)
+        fc1 = tf.keras.layers.Dense(256, activation='relu',
+                                   kernel_initializer=initializer)(s_input)
+        fc2 = tf.keras.layers.Dense(256, activation='relu',
+                                   kernel_initializer=initializer)(fc1)
+        a_out = tf.keras.layers.Dense(self.action_size, activation='tanh',
+                                     kernel_initializer=initializer)(fc2)
+        a_out = a_out * self.action_upper_bound
+        model = tf.keras.models.Model(s_input, a_out, name='actor')
+        model.summary()
+        return model
+    
+    def __call__(self, states, target=False):
+        states 
+        if not target:
+            pi = self.model(states)
+        else:
+            pi = self.target(states)
+        return pi
+    
+    def update_target(self, tau=0.01):
+        model_weights = self.model.get_weights()
+        target_weights = self.target.get_weights()
+        # update weights layer-by-layer using Polyak Averaging
+        new_weights = []
+        for w, w_dash in zip(model_weights, target_weights):
+            new_w = tau * w + (1 - tau) * w_dash
+            new_weights.append(new_w)
+        self.target.set_weights(new_weights)
+        
+    def train(self, states, critic):
+        with tf.GradientTape() as tape:
+            actor_weights = self.model.trainable_variables
+            actions = self.model(states)
+            critic_values = critic(states, actions)
+            # -ve value is used to maximize the function
+            actor_loss = -tf.math.reduce_mean(critic_values)
+        actor_grad = tape.gradient(actor_loss, actor_weights)
+        self.optimizer.apply_gradients(zip(actor_grad, actor_weights))
+        return actor_loss
+    
+  \end{pygments}
+  \caption{Actor class for DDPG algorithm. Actor estimates the policy
+    function. It learns by maximizing critic output.}
+  \label{lst:ddpg_actor}
+\end{listing}
+
+\subsubsection{Critic Class}
+The python code for creating a critic class is provided in the listing
+\ref{lst:ddpg_critic}. The critic uses a deep network to estimate the
+Q value function for a given state-action pair as input. It is similar
+to the DQN architecture discussed in the previous chapter. It also
+uses a target network similar to the DDQN architecture discussed in
+the previous chapter to provide better training stability. The critic
+learns by minimizing the TD Q function error provided by equation
+\eqref{eq:ddpg_qloss}. The target value $y$ is computed using both
+target actor and target critic models. The target network is updated
+at regular intervals using Polyak Averaging. The value $\tau=1.0$
+indicates a \emph{hard update} where the target parameters are replaced by the
+primary model parameters. The value $\tau < 1.0$ indicates a \emph{soft
+update} where the target parameters are replaced by a weighted average
+of these two network parameters. 
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class Critic:
+    def __init__(self, obs_shape, action_size,
+                learning_rate=0.0003,
+                gamma=0.99,
+                model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.gamma = gamma
+        self.lr = learning_rate
+        
+        if model is None:
+            self.model = self._build_model()
+            self.target = self._build_model()
+        else:
+            self.model = model
+            self.target = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
+        
+        # target shares same weights as the main model in the beginning
+        self.target.set_weights(self.model.get_weights())
+        
+    def _build_model(self):
+        s_input = tf.keras.layers.Input(shape=self.obs_shape)
+        s_out = tf.keras.layers.Dense(16, activation='relu')(s_input)
+        s_out = tf.keras.layers.Dense(32, activation='relu')(s_out)
+        
+        # action as input
+        a_input = tf.keras.layers.Input(shape=(action_size, ))
+        a_out = tf.keras.layers.Dense(32, activation='relu')(a_input)
+        
+        # concat [s, a]
+        concat = tf.keras.layers.Concatenate()([s_out, a_out])
+        out = tf.keras.layers.Dense(256, activation='relu')(concat)
+        out = tf.keras.layers.Dense(256, activation='relu')(out)
+        net_out = tf.keras.layers.Dense(1)(out)
+        
+        # output is the Q-value output
+        model = tf.keras.models.Model(inputs=[s_input, a_input], 
+                                      outputs=net_out, name='critic')
+        model.summary()
+        return model
+    
+    def __call__(self, states, actions, target=False):
+        if not target:
+            value = self.model([states, actions])
+        else:
+            value = self.target([states, actions])
+        return value
+        
+    def update_target(self, tau=0.01):
+        model_weights = self.model.get_weights()
+        target_weights = self.target.get_weights()
+        # update weights layer-by-layer using Polyak Averaging
+        new_weights = []
+        for w, w_dash in zip(model_weights, target_weights):
+            new_w = tau * w + (1 - tau) * w_dash
+            new_weights.append(new_w)
+        self.target.set_weights(new_weights)
+        
+    def train(self, states, actions, rewards, next_states, dones, actor):
+        with tf.GradientTape() as tape:
+            critic_weights = self.model.trainable_variables
+            target_actions = actor(states, target=True)
+            target_q_values = self.target([next_states, target_actions])
+            y = rewards + self.gamma * (1-dones) * target_q_values
+            q_values = self.model([states, actions])
+            critic_loss = tf.math.reduce_mean(tf.square(y - q_values))
+        critic_grads = tape.gradient(critic_loss, critic_weights)
+        self.optimizer.apply_gradients(zip(critic_grads, critic_weights))
+        return critic_loss
+  \end{pygments}
+  \caption{Critic Class for DDPG algorithm. Critic estimates the Q
+  function and learns by minimizing the TD error.}
+  \label{lst:ddpg_critic}
+\end{listing}
+
+\subsubsection{DDPG Agent}
+The python code for implement DDPG agent class is provided in Listing
+\ref{lst:ddpg}. It uses the actor and critic class defined above to
+implement the actor-critic architecture for implementing DDPG
+algorithm. Since it uses a deterministic network to estimate action, a
+noise is added for exploration during training. During training, a
+batch of experiences is sampled from the replay buffer and is used for
+training both actor and critic simultaneously. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class DDPGAgent:
+    def __init__(self, obs_shape, action_size,
+                 batch_size, buffer_capacity,
+                 action_upper_bound=1.0,
+                 action_lower_bound=-1.0,
+                lr_a=1e-3, lr_c=1e-3, gamma=0.99,
+                 noise_std=0.2,
+                actor_model=None,
+                critic_model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.buffer_capacity = buffer_capacity
+        self.batch_size = batch_size
+        self.action_upper_bound = action_upper_bound
+        self.action_lower_bound = action_lower_bound
+        self.gamma = gamma
+        self.lr_a = lr_a
+        self.lr_c = lr_c
+        self.noise_std = noise_std
+        
+        self.actor = Actor(self.obs_shape, self.action_size, 
+                           learning_rate=self.lr_a,
+                          action_upper_bound=self.action_upper_bound,
+                          model=actor_model)
+        self.critic = Critic(self.obs_shape, self.action_size,
+                            learning_rate=self.lr_c,
+                            gamma=self.gamma,
+                            model=critic_model)
+        self.buffer = ReplayBuffer(self.buffer_capacity)
+        self.action_noise = OUActionNoise(mean=np.zeros(1), 
+                 std_deviation=float(self.noise_std) * np.ones(1))
+        
+    def policy(self, state):
+        action = tf.squeeze(self.actor(state))
+        noise = self.action_noise()
+        # add noise to action
+        sampled_action = action.numpy() + noise
+        # check action bounds
+        valid_action = np.clip(sampled_action, self.action_lower_bound, 
+                                           self.action_upper_bound)
+        return valid_action
+        
+    def experience_replay(self):
+        if len(self.buffer) < self.batch_size:
+            return
+        mini_batch = self.buffer.sample(self.batch_size)
+        states = np.zeros((self.batch_size, *self.obs_shape))
+        next_states = np.zeros((self.batch_size, *self.obs_shape))
+        actions = np.zeros((self.batch_size, self.action_size))
+        rewards = np.zeros((self.batch_size, 1))
+        dones = np.zeros((self.batch_size, 1))
+        for i in range(len(mini_batch)):
+            states[i] = mini_batch[i][0]
+            actions[i] = mini_batch[i][1]
+            rewards[i] = mini_batch[i][2]
+            next_states[i] = mini_batch[i][3]
+            dones [i] = mini_batch[i][4]
+        states = tf.convert_to_tensor(states, dtype=tf.float32)
+        actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+        a_loss = self.actor.train(states, self.critic)
+        c_loss = self.critic.train(states, actions, rewards, \
+                           next_states, dones, self.actor)
+        return a_loss, c_loss
+    
+    def update_targets(self, tau_a=0.01, tau_c=0.02):
+        self.actor.update_target(tau_a)
+        self.critic.update_target(tau_c)    
+    
+  \end{pygments}
+  \caption{Python code for implementing DDPG Agent. It uses the
+  actor-critic architecture.}
+  \label{lst:ddpg}
+\end{listing}
+
+\subsection{Solving Pendulum Problem}
+\index{Environment!Gym!Pendulum-v1}
+Gym's pendulum
+environment\footnote{\url{https://gymnasium.farama.org/environments/classic_control/pendulum/}}
+is a classical control problem which is also known as the inverted
+pendulum swingup problem in control theory.  The system consists of a
+pendulum attached at one end to a fixed point, and the other end being
+free. The pendulum starts in a random position and the goal is to
+apply torque on the free end to swing it into an upright position,
+with its center of gravity right above the fixed point. The
+observation and the action spaces are continuous spaces unlike the
+environments used in the previous chapters. Some of the states of the
+pendulum is shown in Figure \ref{fig:pendu_states}. The upright
+vertical position (d) is the desirable state of the system. The range
+of values for input, output and reward elements are shown in Table
+\ref{tab:pendu_param}. Each episode involves 200 iteration steps. The
+total reward for an episode is the sum of individual rewards obtained
+at each of these steps. Since, no training is involved in this code,
+the total reward for each of these episodes will be a large negative
+number. The problem is considered solved if the average reward for an
+episode remains above -200 for a considerable amount of time (say, 50
+episodes). 
+
+\begin{table}[htbp]
+%  \resizebox{\columnwidth}{!}{
+    \begin{tabular}{|c|c|c|c|c|} \hline
+      Variable Name & shape & Elements &  Min & Max \\ \hline
+      \multirow{3}{*}{Observation (state), $s$} & \multirow{3}{*}{(3,1)} & $\cos{\theta}$ & -1.0 & 1.0 \\ \cline{3-5}
+      &       & $\sin{\theta}$ & -1.0 & 1.0 \\ \cline{3-5}
+      &       & $\dot{\theta}$ & -8.0 & 8.0 \\\hline
+      Action, $a$         & (1,)  & Joint Effort   & -2.0 & 2.0 \\ \hline
+      Reward, $r$     & (1,)  & $-\theta^2+0.1\dot{\theta}^2+0.001a^2$ &-16.273 & 0\\\hline
+    \end{tabular}
+  %}
+    \caption{Input-Output variables for `\texttt{Pendulum-v1}' Gym Simulation Environment.}
+    \label{tab:pendu_param}
+\end{table}
+
+\begin{figure}[!t]
+  \begin{tabular}{cccc}
+    \includegraphics[scale=0.3]{./figures/chap06/pendulum_1.png} & 
+    \includegraphics[scale=0.3]{./figures/chap06/pendulum_2.png} & 
+    \includegraphics[scale=0.3]{./figures/chap06/pendulum_3.png} & 
+    \includegraphics[scale=0.2]{./figures/chap06/pendulum_4.png} \\
+    (a) & (b) & (c) & (d)
+  \end{tabular}
+  \caption{A few snapshots of \texttt{Pendulum-v1} environment states.
+(d) shows the final successful state of the environment.}
+\label{fig:pendu_states}
+\end{figure}
+
+\subsubsection{Training DDPG Agent}
+The code for training a DDPG agent to solve the Pendulum problem
+environment is provided in Listing \ref{lst:ddpg_train_env}. The episode
+is terminated after 200 iterative steps. The experiences are generated
+by using a stochastic policy, which is itself obtained by adding
+stochastic noise to a deterministic action provided by the actor
+network. The experiences are stored in a replay buffer and are then
+sampled in batches during training.
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+import os
+import sys
+def solve_problem(env, agent, max_episodes=500):
+    tau_a, tau_c = 0.01, 0.01    
+    scores = []
+    for e in range(max_episodes):
+        state = env.reset()[0]
+        ep_score = 0
+        done = False
+        steps = 0
+        while not done:
+            tf_state = tf.expand_dims(tf.convert_to_tensor(state), axis=0) 
+            # take action 
+            action = agent.policy(tf_state)
+            # make transition and receive reward
+            next_state, reward, done, _, _ = env.step(action)
+            # store experience in the replay buffer
+            agent.buffer.add((state, action, reward, next_state, done)) 
+            ep_score += reward
+            total_steps += 1
+            steps += 1
+            state = next_state
+            # train the agent
+            agent.experience_replay()
+            # update target models
+            agent.update_targets(tau_a, tau_c)
+            if steps > 200: # terminate the episode
+                done = True
+        # end of while loop
+        scores.append(ep_score)
+        if e % 20 == 0:
+            print(f'episode: {e}, score: {ep_score:.2f}, \
+            avg_score: {np.mean(scores):.2f}, \
+            avg50score: {np.mean(scores[-50:]):.2f}')
+    # end of for loop
+    file.close()
+  \end{pygments}
+  \caption{Python function for solving a Gym problem environment}
+  \label{lst:ddpg_train_env}
+\end{listing}
+
+\subsection{Main Code to generate output}
+The main code for solving the pendulum problem using DDPG agent is
+provided in Listing \ref{lst:ddpg_main_pendu}. We create an
+instance for the \texttt{Pendulum-v1} environment. Then, we create a
+DDPG agent and finally call the \texttt{solve\_problem()} function to
+train the agent. The listing also shows the output of this program
+when executed. As one can see, the average episodic reward increases
+from about -1400 to about -230 in about 500 episodes. The training
+performance of the DDPG algorithm in solving the pendulum problem is
+shown graphically in Figure \ref{fig:ddpg_pendu}. The variable
+\texttt{avg50score} represents the average score of last 50 episodes.
+As we can see, this value reaches above -200 indicating that the
+problem is solved successfully.
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+# create an environment
+env = gym.make('Pendulum-v1', g=9.81, render_mode="rgb_array")
+
+obs_shape = env.observation_space.shape
+action_shape = env.action_space.shape
+action_size = action_shape[0]
+action_ub = env.action_space.high
+action_lb = env.action_space.low
+print('Observation shape: ', obs_shape)
+print('Action shape: ', action_shape)
+print('Max episodic Steps: ', env.spec.max_episode_steps)
+print('Action space bounds: ', (action_ub[0], action_lb[0]))
+
+# create an agent
+agent = DDPGAgent(obs_shape, action_size, 
+                  batch_size=128, buffer_capacity=20000,
+                 action_upper_bound=2.0,
+                 action_lower_bound=-2.0)
+
+# solve a problem
+solve_problem(env, agent, max_episodes=500) 
+  \end{pygments}
+  \begin{framed}
+    \begin{small}
+    \begin{verbatim}
+Output:
+Observation shape:  (3,)
+Action shape:  (1,)
+Max episodic Steps:  200
+Action space bounds:  (2., -2)
+episode: 0, score: -1392.89, avg_score: -1392.89,  avg50score: -1392.89 
+episode: 20, score: -249.34, avg_score: -1142.08,  avg50score: -1142.08 
+episode: 40, score: -124.50, avg_score: -657.28,   avg50score: -657.28 
+episode: 60, score: -131.54, avg_score: -483.67,   avg50score: -293.25 
+episode: 80, score: -250.10, avg_score: -417.34,   avg50score: -163.04 
+...
+episode: 400, score: -116.90, avg_score: -240.71, avg50score: -183.42 
+episode: 420, score: -243.59, avg_score: -238.83, avg50score: -190.46 
+episode: 440, score: -125.23, avg_score: -239.29, avg50score: -215.33 
+episode: 460, score: -131.01, avg_score: -236.41, avg50score: -217.93 
+episode: 480, score: -228.30, avg_score: -235.49, avg50score: -188.83 
+    \end{verbatim}
+  \end{small}
+  \end{framed}
+  \caption{Main code for training DDPG agent to solve the
+    \texttt{Pendulum-v1} problem. }
+  \label{lst:ddpg_main_pendu}
+\end{listing}
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.5]{./figures/chap06/pendu_ddpg.png}
+  \caption{Training performance of DDPG algorithm in solving
+    \texttt{Pendulum-v1} problem}
+  \label{fig:ddpg_pendu}
+\end{figure}
+
+\section{Trust Region Policy Optimization} \label{sec:trpo}
+\index{Trust Region Policy Optimization (TRPO)}
+\gls{rl} agents learn by trial and error to maximize the cumulative
+expected rewards for a given task. The agent finds the optimal
+policy by exploring all kinds of actions and memorizes actions that
+give good rewards. During exploration, the agent will execute some bad
+actions as well which could be unsafe or dangerous for an agent
+operating in a real-world environment. Consider the example of an
+autonomous vehicle learning to avoid obstacles. It can not afford to
+make collisions with obstacles just to check if it gives good reward.
+Therefore, it becomes important in such scenarios to constrain the
+learning by ensuring that the agent explores in a safe region.
+
+\gls{trpo} is one such constrained policy optimization method that
+aims to maximize the expected return of a policy while ensuring that
+updates to the policy are safe and do not lead to catastrophic
+performance degradation. It does this by restricting the policy
+updates to a \emph{trust region}, a neighborhood around the current policy
+where the expected return is guaranteed to improve. This trust region
+is defined by imposing a constraint such that the Kullbach-Leibler
+(KL) divergence between the old policy and the new policy is less than
+some constant $delta$, also known as trust region constant. KL
+divergence measures the difference between two probability
+distributions. It tells us how far a new policy is from the old
+policy. By imposing this constraint, we ensure that the agent improves
+the policy leading to higher rewards while avoiding undesirable
+behaviour.
+
+The detailed mathematical derivation of these constraints are provided
+in  \cite{schulman2015trust}. A part of this derivation is reproduced
+here for the sake of completion.   
+
+
+The expected discounted reward for a given policy $\pi$ is given by
+\begin{equation}
+\eta_\pi = \E_{s_0,a_0, \ldots} \left[\sum_{t=0}^\infty\gamma^t
+  r(s_t)\right] 
+  \label{eq:old_dr}
+\end{equation}
+where $s_0\sim \rho_0(s_0)$, $a_t\sim\pi(a_t|s_t)$, $s_{t+1}\sim
+P(s_{t+1}|s_t,a_t)$.
+
+The expected return for a new policy $\tilde{\pi}$ can be written in
+terms of the advantage over $\pi$ accumulated over time steps as given
+by 
+\begin{equation}
+  \eta(\tilde{\pi}) =  \eta(\pi) +
+  \E_{s_0,a_0,\ldots\tilde{\pi}}\left[\sum_{t=0}^\infty\gamma^t A_\pi(s_t,
+  a_t)\right] 
+  \label{eq:new_dr}
+\end{equation}
+where $A_\pi(s_t,a_t)$ is the advantage of the old policy $\pi$ and
+$A_\pi(s_t,a_t)=Q_\pi(s_t,a_t) - V_\pi(s_t)$. 
+
+We can rewrite the equation \eqref{eq:new_dr} with a sum over states
+instead of time steps as follows:
+\begin{eqnarray}
+  \eta(\tilde{\pi}) &=&  \eta(\pi) + \sum_{t=0}^\infty \sum_s
+  P(s_t=s|\tilde{\pi})\sum_a \tilde{\pi}(a|s)\gamma^tA_\pi(s,a)
+  \nonumber \\
+  &=&  \eta(\pi) + \sum_s \sum_{t=0}^\infty  \gamma^t
+  P(s_t=s|\tilde{\pi})\sum_a \tilde{\pi}(a|s)A_\pi(s,a)  \nonumber \\
+  &=&  \eta(\pi) + \sum_s\rho_{\tilde{\pi}}(s)  \sum_a \tilde{\pi}(a|s)A_\pi(s,a)
+  \label{eq:new_dr_vf}
+\end{eqnarray}
+where $\rho_\pi$ is the discounted visitation frequencies given by
+\begin{equation}
+  \rho_\pi(s) = P(s_0=s) + \gamma P(s_1=s) + \gamma^2 P(s_2=s) +
+  \cdots
+  \label{eq:dvf}
+\end{equation}
+
+The above equation \eqref{eq:new_dr_vf} implies that any policy update
+$\pi \rightarrow \tilde{\pi}$ that has a non-negative expected
+advantage at \emph{every} state $s$, i.e., $\sum_a
+\tilde{\pi}(a|s)A_\pi(s,a) \ge 0$, is guaranteed to increase the
+policy performance $\eta$ or leave it constant in case the expected
+advantage is zero everywhere. However, due to approximation and
+estimation errors, it is not possible to meet this requirement and the
+expected advantage could become negative for some states. The complex
+dependency of $\rho_{\tilde{\pi}}$ on $\tilde{pi}$ makes equation
+\eqref{eq:new_dr_vf} to optimize directly.  
+
+To simplify the problem, we use a local approximation to $\eta$:
+\begin{equation}
+  L_\pi(\tilde{\pi}) = \eta(\pi) + \sum_s \rho_\pi(s) \sum_a
+  \tilde{\pi}(a|s)A_\pi(s,a)
+  \label{eq:new_dr_appx}
+\end{equation}
+
+Note that $L_\pi$ uses the visitation frequency $\rho_\pi$ rather than
+$\rho_{\tilde{\pi}}$, ignoring the changes in state visitation density
+due to changes in policy. If we have a parameterized policy function
+$\pi_\theta$, where $\pi_\theta(a|s)$ is differentiable function of
+the parameter vector $\theta$, then $L_\pi$ matches to $\eta$ to the
+first order for sufficiently small steps. However, it does not give us
+any guidance on how big of a step to take. 
+
+To address this issue, Kakade and Langford
+\cite{kakade2002approximately} proposed a policy update scheme called
+conservative policy iteration as given below:
+\begin{equation}
+  \pi_{\text{new}}(a|s) = (1-\alpha)\pi_{\text{old}}(a|s) + \alpha
+  \pi'(a|s) 
+  \label{eq:kl_update}
+\end{equation}
+where $\pi'=\arg\max_{\pi'} L_{\pi_{\text{old}}}(\pi')$. In other
+words, $\pi'$ is the policy that maximizes $L_{\pi_{\text{old}}}$. The
+above equation \eqref{eq:kl_update} gives rise to the following lower
+bound on $\eta$:
+\begin{equation}
+  \eta(\tilde{\pi}) \ge L_\pi(\tilde{\pi}) - CD_{KL}^{\text{max}}(\pi,
+  \tilde{\pi})
+  \label{eq:kl_bound}
+\end{equation}
+where $C = \frac{4\epsilon \gamma}{(1-\gamma)^2}$ is the penalty
+coefficient with $\epsilon=\max_{s,a}|A_\pi(s,a)|$ and $D_{KL}^{max}$
+denotes the maximum KL divergence between the old policy and the new
+policy over all states given by: 
+\begin{equation}
+  D_{KL}^{\text{max}}(\pi, \tilde{\pi}) = \max_s D_{KL}(\pi(.|s),
+  \tilde{\pi}(.|s))
+  \label{eq:kld_policy}
+\end{equation}
+                
+This equation shows that by maximizing the right hand side, it can be
+guaranteed that the objective function $\eta$ is non-decreasing. To
+show this, let's denote the right hand side term at any given
+iteration $i$ with $M_i(\pi)$ given by:
+\begin{equation}
+  M_i(\pi) = L_{\pi_i}(\pi) - CD_{KL}^{\text{max}}(\pi_i, \pi)
+  \label{eq:mi}
+\end{equation}
+
+Then we have,
+\begin{equation}
+  \eta(\pi_{i+1}) \ge M_i(\pi_{i+1}) ;\;  \text{by using equation
+    \eqref{eq:kl_bound}}
+  \label{eq:eta1}
+\end{equation}
+     
+Now, let's compute $M_i(\pi = \pi_i)$ from equation \eqref{eq:mi} as
+shown below:
+\begin{eqnarray}
+  M_i(\pi_i) &=&  L_{\pi_i}(\pi_i) - CD_{KL}^{\text{max}}(\pi_i,
+\pi_i) \nonumber \\
+&=& L_{\pi_i}(\pi_i) \quad \because D_{KL}(\pi_i, \pi_i) = 0\nonumber \\
+&=& \eta(\pi_i) \quad \text{by using equation
+  \eqref{eq:new_dr_appx}} \nonumber \\
+\Rightarrow M_i(\pi_i) &=&  \eta(\pi_i)
+\label{eq:eta2}
+\end{eqnarray}
+
+Now, subtracting \eqref{eq:eta2} from \eqref{eq:eta1}, we get
+\begin{equation}
+  \eta(\pi_{i+1}) - \eta(\pi_i) \ge M_i(\pi_{i+1}) - M_i(\pi_i)
+  \label{eq:eta3}
+\end{equation}
+
+This shows that by maximizing $M_i$ at each iteration, we can ensure
+that the objective function $\eta$ is non-decreasing. So, for a
+parametrized policy $\pi_\theta(a|s)$, we can improve the policy by
+performing the following maximization: 
+\begin{equation}
+  \maximize_\theta [L_{\theta_{\text{old}}}(\theta) -
+  CD_{KL}^{max}(\theta_{\text{old}}, \theta)]
+  \label{eq:kl_policy_update}
+\end{equation}
+In practice, the use of penalty coefficient $C$ in the above equation
+will lead to very small step size, thereby slowing down the update.
+This can be remedied by putting a constraint on KL divergence between
+the new policy and the old policy instead. This is called a trust
+region constraint. The modified policy optimization problem becomes
+the following:
+\begin{equation}
+  \begin{array}{cc}
+    \displaystyle \maximize_\theta &
+    L_{\theta_{\text{old}}(\theta)} \\
+    & \\
+    \text{subject to} & D_{KL}^{\text{max}}(\theta_{\text{old}}, \theta)
+    \le \delta
+  \end{array}
+  \label{eq:kl_policy_update_2}
+\end{equation}
+This problem imposes a constraint that the KL divergence is bounded at
+every point in the state space. This becomes impractical to solve in
+practice due to the large number of constraints. Instead, we use a
+heuristic approximation which considers the average KL divergence:
+\begin{equation}                                         
+  \bar{D}^\rho_{KL}(\theta_1, \theta_2) =
+  \mathbb{E}_{s\sim\rho}[D_{KL}(\pi_{\theta_1}(.|s),
+  \pi_{\theta_2}(.|s))]
+  \label{eq:avg_kld}
+\end{equation}
+
+Therefore, the final optimization problem becomes:
+\begin{equation}
+  \begin{array}{cc}
+    \maximize_\theta & L_{\theta_{\text{old}}}(\theta) \\
+    \text{subject to} &
+    \bar{D}^{\rho\theta_{\text{old}}}_{KL}(\theta_{\text{old}}, \theta)
+    \le \delta
+  \end{array}
+  \label{eq:trpo}
+\end{equation}
+
+Expanding $L$, we get the following optimization problem:
+\begin{equation}
+  \begin{array}{cc}
+    \maximize_\theta & \sum_s \rho\theta_{\text{old}}(s) \sum_a
+    \pi_\theta(a|s)A_{\theta_{\text{old}}}(s,a) \\
+    \text{subject to} &
+    \bar{D}^{\rho\theta_{\text{old}}}_{KL}(\theta_{\text{old}},
+    \theta) \le \delta
+   \end{array}
+  \label{eq:trpo2}
+\end{equation}
+
+We now replace the sum over states $\sum_s \rho\theta_{\text{old}}(s)$
+by expectation $\mathbb{E}_{s\in\rho\theta_{\text{old}}}[\cdots]$ and
+replace the sum over actions by an importance sampling estimator.
+Using $q$ to denote the sampling distribution, the contribution of a
+single state $s_n$ to the loss function is given by
+
+\begin{equation}
+  \sum_a \pi_\theta(a|s_n)A_{\theta_{\text{old}}}(s_n,a)  =
+  \mathbb{E}_{a\sim
+  q}\left[\frac{\pi_\theta(a|s_n)}{q(a|s_n)}A_{\theta_{\text{old}}}(s_n,a)\right]
+  \label{eq:ise}
+\end{equation}
+
+Then we replace the advantage values $A_{\theta_{\text{old}}}$ by Q
+values $Q_{\theta_{\text{old}}}$, the above constrained optimization
+problem becomes:                 
+\begin{equation}
+  \begin{array}{cc}
+      \maximize_\theta & \E_{s\sim \rho\theta_{\text{old}}, a\sim
+    q}\left[\frac{\pi_\theta(a|s)}{q(a|s)}Q_{\theta_{\text{old}}}(s,a)\right]
+    \\
+  \text{subject to} & \E_{s\sim
+    \rho\theta_{\text{old}}}
+    [D_{KL}(\pi_{\theta_{\text{old}}}(.|s)||\pi_\theta(.|s))]
+    \le \delta
+ \end{array}
+  \label{eq:trpo3}
+\end{equation}
+The constraint ensures that the new policy does not deviate too much
+from the current policy.
+           
+\section{Proximal Policy Optimization (PPO) Algorithm} \label{sec:ppo}
+\index{Proximal Policy Optimization (PPO)}
+In the previous section, we see that TRPO uses a surrogate objective
+function for policy optimization while imposing a constraint that the
+KL divergence between the old and the new policy should be less than
+$\delta$. This optimization problem can be approximately solved by
+using the conjugate gradient algorithm, after making a linear
+approximation to the objective function and a quadratic approximation
+to the constraint. In general, it is a computationally expensive
+process.  The proximal policy optimization (PPO)
+\cite{schulman2017proximal} simplifies TRPO by using a modified
+objective function where the constraint is converted into a penalty
+term. There are two approaches to achieve this as explained in the
+following two sub-sections.
+
+\subsection{Clipped Surrogate Objective}
+Let us denote the probability ratio between new and old policy as
+$r(\theta)$ as shown below:
+\begin{equation}
+  r(\theta) = \frac{\pi_\theta(a|s)}{\pi_{\theta_{\text{old}}}(a|s)}
+  \label{eq:pr}
+\end{equation}
+
+The objective function to be optimized can be rewritten in terms of
+$r$ by making substitution in \eqref{eq:trpo2}
+
+\begin{equation}
+  J^{\text{CPI}}(\theta) = \mathbb{E}[r(\theta)\hat{A}_{\theta_{\text{old}}}]
+  \label{eq:l_cpi}
+\end{equation}
+where $\hat{A}$ represents the estimated advantage value and the superscript CPI stands for conservative policy
+iteration. Maximizing this objective function without TRPO constraint
+would lead to instability with large parameter updates and big policy
+ratios. PPO avoids this by forcing $r(\theta)$ to stay within a small
+interval around 1, given by the range $[1-\epsilon, 1+\epsilon]$ where
+$\epsilon$ is a small hyper-parameter, say $\epsilon=0.2$. Therefore,
+the modified cost function to be maximized in PPO is given as follows:
+\begin{equation}
+  J^{\text{CLIP}}(\theta) =
+  \mathbb{E}[\min(r(\theta)\hat{A}_{\text{old}},
+  \text{clip}(r(\theta), 1-\epsilon,
+1+\epsilon)\hat{A}_{\theta_{\text{old}}})]
+  \label{eq:j_clip}
+\end{equation}
+The final objective function is a lower bound on the unclipped
+objective. The probability ratio will be clipped at $1+\epsilon$ or at
+$1-\epsilon$ based on two cases as shown in the Figure
+\ref{fig:ppo_clip_pr}. The left figure shows the case where the
+advantage is positive ($A>0$) indicating that the new policy is doing
+better than the old policy. So the probability ratio $r$ will be
+allowed to increase until it reaches $1+\epsilon$. On the other hand,
+the right figure shows the case where the advantage is negative
+($A<0$), indicating that the new policy is performing worse. In such a
+case, $r$ will be reduced until it reaches the lower boundary
+$1-\epsilon$.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.4, trim=3cm 3cm 3cm 3cm, clip]{./figures/chap06/ppo_clip.jpg}
+  \caption{Single time step of surrogate function $J^{\text{CLIP}}$ as
+a function of probability ratio $r$ for positive (left) and negative
+(right) advantages. The red circle shows the starting point of policy
+optimization}
+  \label{fig:ppo_clip_pr}
+\end{figure}
+
+While applying PPO to actor-critic models, the above objective
+function \eqref{eq:j_clip} is augmented with an value estimation error
+term and an entropy term as shown below for better performance:
+\begin{equation}
+  J^{\text{CLIP}+VE+S} = \mathbb{E}[J^{\text{CLIP}}(\theta) -
+  c_1(V_\theta(s)-V_{\text{target}})^2 + c_2S(s,\pi_\theta(.))]
+  \label{eq:ppo_clip}
+\end{equation}
+The entropy term improves exploration during the training process. The
+resulting PPO algorithm with a clipped surrogate objective function is
+provided in the Algorithm listing \ref{alg:ppo_clip}
+
+
+\begin{algorithm}[htbp]
+  \caption{\small PPO-Clip Algorithm} 
+  \label{alg:ppo_clip}
+  \scriptsize
+  \begin{algorithmic}[1]
+    \Require initial policy parameters $\theta_0$, initial value function parameters $\phi_0$
+    \For {$k=0,1,2, \dots$}
+    \State Collect a set of trajectories $\mathscr{D}_k =
+    \{\tau_i\}$ by running policy $\pi_k=\pi(\theta_k)$ in the
+    environment.
+    \State Compute rewards-to-go $\hat{R}_k$
+    \State Compute advantage estimates $\hat{A}_k$ based on the current value function $V(\phi_k)$
+    \State Update the policy by maximizing the PPO-Clip objective via stochastic gradient ascent:
+    \begin{equation}
+      \theta_{k+1} = \arg\max_\theta \frac{1}{|\mathscr{D}_k|T} \sum_{\tau\in\mathscr{D}_k} \sum_{t=0}^T  
+      \min \left[r(\theta)A^{\pi_k}(s_t, a_t), g(\epsilon, A^{\pi_k}(s_t,a_t))\right]
+      \label{eq:act_up_clip}
+    \end{equation}
+    where 
+    \[g(\epsilon,a) = \left\{\begin{array}{l}
+        (1+\epsilon)A\ \text{if}\ A\ge 0 \\
+        (1-\epsilon)A\ \text{if}\ A<0 
+    \end{array} \right.\]
+    \State Update value function to minimize the following error function by using gradient descent algorithm:
+    \begin{equation}
+      \phi_{k+1} = \arg\min_\phi \frac{1}{|\mathscr{D}_k|T}\sum_{\tau \in\mathscr{D}_k}\sum_{t=0}^T
+      \left(V_\phi(s_t) - \hat{R}_t\right)^2
+      \label{eq:crit_up}
+    \end{equation}
+    \EndFor
+  \end{algorithmic}
+\end{algorithm}
+
+
+\subsection{Adaptive KL Penalty Coefficient}
+Another approach, as an alternative to the above clipped surrogate
+objective, is to use a penalty on the KL divergence to convert the TRPO constrained optimization problem given by
+\eqref{eq:trpo3} into an unconstrained optimization problem given by
+\begin{equation}
+  \maximize_\theta \E
+  \left[\frac{\pi_\theta(a|s)}{\pi_{\theta_{\text{old}}}(a|s)}\hat{A} -
+  \beta D_{KL}(\pi_{\theta_{\text{old}}}, \pi_\theta)\right]
+  \label{eq:ppo_klp}
+\end{equation}
+where $\beta$ is the penalty coefficient
+is adapted to achieve some target value of
+KL divergence $d_{\text{targ}}$ after each policy update as per the
+following rule. Compute $d=D_{KL}(\pi_{\theta_{\text{old}}},
+\pi_\theta)$ and,
+\begin{equation}
+  \begin{array}{ccc}
+    \text{If} & d < d_{\text{targ}}/1.5, & \beta \leftarrow \beta/2   \\
+    \text{If} & d > d_{\text{targ}}\times 1.5, & \beta \leftarrow \beta \times 2
+  \end{array}
+  \label{eq:beta_update}
+\end{equation}
+The corresponding PPO algorithm is provided in the Algorithm listing
+\ref{alg:ppo_klp}.
+
+
+\begin{algorithm}[htbp]
+  \caption{\small PPO with Adaptive KL Penalty}
+  \label{alg:ppo_klp}
+  \scriptsize
+  \begin{algorithmic}[1]
+    \Require initial policy parameter $\theta_0$, initial value parameter $\phi_0$, initial KL penalty $\beta_0$, target KL-divergence $\delta$
+    \For {$k=0,1,2,\dots$}
+    \State Collect a set of partial trajectories $\mathscr{D}_k$ on policy $\pi=\pi(\theta_k)$.
+    \State Estimate Advantage $\hat{A}_k$ based on current value function $V(\phi_k)$
+    \State Compute policy update by taking k steps of mini-batch SGD.
+    \begin{equation}
+    \theta_{k+1} = \arg\max_\theta
+      [r_{\theta_k}(\theta)\hat{A}_{\theta_k} -
+      \beta_k\bar{D}_{KL}(\theta||\theta_k)]
+      \label{eq:act_up_penalty}
+    \end{equation}
+    \State for each policy update step $k$, update the value of
+    $\beta$ using \eqref{eq:beta_update}
+    \EndFor                                   
+  \end{algorithmic}
+\end{algorithm}
+
+\subsection{Generalized Advantage Estimator}
+Generalized Advantage Estimator (GAE) is a technique to estimate the
+advantage function, a crucial component in policy gradient methods.
+The advantage function measures how much better a particular action is
+compared to the average action. It's essential for guiding the agent
+towards actions that lead to higher rewards. The advantage function
+can be estimated from the value function estimates (details are
+available in \cite{schulman2015high}) by using the generalized
+advantage estimator given by the following equation:
+\begin{equation}
+    \hat{A}_t = \sum_{l=0}^\infty (\gamma \lambda)^l \delta_{t+l}
+    \label{eq:gae}
+\end{equation}
+  where parameter $0\le\lambda \le 1$ controls the trade-off between
+  bias and variance and $\delta_t$ represents the time delay error
+  given by
+  \begin{equation}
+    \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
+    \label{eq:tde}
+  \end{equation}
+
+  \subsection{Python implementation of PPO Algorithm}
+We implement the PPO algorithm using Actor-Critic architecture as
+described earlier. Actor class learns the policy
+distribution by maximizing a surrogate objective function. On the other hand, the
+Critic class learns the value function by minimizing the \gls{td}
+error. 
+
+
+  \subsubsection{PPO Actor Class}
+The Python code for implementing a PPO Actor class is provided in the
+code Listing \ref{lst:ppo_actor}. The actor class  uses a neural
+network to estimate the mean and standard deviation of the policy
+distribution. It has the option of receiving an externally created
+deep network through constructor argument \texttt{model}.  The
+\texttt{train} method implements both versions of PPO algorithm,
+namely, \texttt{clip} and \texttt{penalty} method as given by
+equations \eqref{eq:act_up_clip} and \eqref{eq:act_up_penalty}
+respectively. The negative sign with actor loss indicates that it
+maximizes the cost function. The \texttt{penalty} method updates the
+entropy coefficient $\beta$ by using the equation
+\eqref{eq:beta_update}. Please note that both the probability ratio
+$r(\theta)$ and the advantage $A(\theta)$ have the same shape.  
+
+  \begin{listing}
+    \begin{pygments}[frame=single, indent=L]{python}
+import tensorflow as tf
+import numpy as np
+import tensorflow_probability as tfp
+class PPOActor():
+    def __init__(self, obs_shape, action_size,
+                 learning_rate=0.0003, 
+                 action_upper_bound=1.0,
+                 epsilon=0.2, lmbda=0.5, kl_target=0.1, 
+                 beta=0.1, entropy_coeff=0.2,
+                 critic_loss_coeff=0.1,
+                 grad_clip=10.0,
+                 method='clip', 
+                model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.action_ub = action_upper_bound
+        self.lr = learning_rate
+        self.epsilon = epsilon # clip on ratio
+        self.lam = lmbda # required for penalty method
+        self.beta = beta # kl penalty coefficient
+        self.entropy_coeff = entropy_coeff
+        self.c_loss_coeff = critic_loss_coeff
+        self.method = method # choose between 'clip' and 'penalty'
+        self.kl_target = kl_target
+        self.kl_value = 0 # to store most recent kld value
+        self.grad_clip = grad_clip # applying gradient clipping
+        # create actor model
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(self.lr)
+        # additional parameters
+        logstd = tf.Variable(np.zeros(shape=(self.action_size, )), \
+                                             dtype=np.float32)
+        self.model.logstd = logstd
+        self.model.trainable_variables.append(logstd)
+        
+    def _build_model(self):
+        last_init = tf.random_uniform_initializer(minval=-0.01, maxval=0.01)
+        state_input = tf.keras.layers.Input(shape=self.obs_shape)
+        x = tf.keras.layers.Dense(128, activation='relu')(state_input)
+        x = tf.keras.layers.Dense(64, activation='relu')(x)
+        x = tf.keras.layers.Dense(64, activation='relu')(x)
+        net_out = tf.keras.layers.Dense(self.action_size, activation='tanh',
+                                       kernel_initializer=last_init)(x)
+        net_out = net_out * self.action_ub
+        model = tf.keras.models.Model(state_input, net_out, name='actor')
+        model.summary()
+        return model
+    
+    def __call__(self, state):
+        # input is a tensor
+        mean = tf.squeeze(self.model(state))
+        std = tf.squeeze(tf.exp(self.model.logstd))
+        return mean, std # return tensor
+    
+    def train(self, state_batch, action_batch, advantages, old_pi, c_loss):
+        with tf.GradientTape() as tape:
+            mean = tf.squeeze(self.model(state_batch))
+            std = tf.squeeze(tf.exp(self.model.logstd))
+            pi = tfp.distributions.Normal(mean, std)
+            # r = pi/pi_old
+            ratio = tf.exp(pi.log_prob(tf.squeeze(action_batch)) -
+                          old_pi.log_prob(tf.squeeze(action_batch))) 
+            if ratio.ndim > advantages.ndim: # match shapes
+                ratio = tf.reduce_mean(ratio, axis=-1) 
+            surr_obj = ratio * advantages # surrogate objective function
+            # current kl divergence (kld) value
+            kld = tfp.distributions.kl_divergence(old_pi, pi)
+            if kld.ndim > advantages.ndim:
+                kld = tf.reduce_mean(kld, axis=-1)
+            self.kl_value = tf.reduce_mean(kld)
+            entropy = tf.reduce_mean(pi.entropy()) # entropy
+            if self.method == 'penalty':
+                actor_loss = -(tf.reduce_mean(surr_obj - self.beta * kld)) 
+            elif self.method == 'clip':
+                l_clip = tf.reduce_mean(
+                        tf.minimum(surr_obj, tf.clip_by_value(ratio,
+                        1.-self.epsilon, 1.+self.epsilon) * advantages))
+                actor_loss = -(l_clip - self.c_loss_coeff * c_loss  + \
+                              self.entropy_coeff * entropy)
+            else:
+                raise ValueError('invalid option for PPO method')
+            actor_weights = self.model.trainable_variables
+            actor_grad = tape.gradient(actor_loss, actor_weights)
+            if self.grad_clip is not None:
+                actor_grad = [tf.clip_by_value(grad,\
+                     -1 * self.grad_clip, self.grad_clip)\
+                                    for grad in actor_grad]
+        #outside gradient tape
+        self.optimizer.apply_gradients(zip(actor_grad, actor_weights))
+        return actor_loss.numpy()
+                
+    def update_beta(self):
+        # update beta after each epoch
+        if self.kl_value < self.kl_target / 1.5:
+            self.beta /= 2.
+        elif self.kl_value > self.kl_target * 1.5:
+            self.beta *= 2.
+
+    \end{pygments}
+    \caption{Python code for PPO Actor Class.}
+    \label{lst:ppo_actor}
+  \end{listing}
+  \subsubsection{PPO Critic Class}
+  The Python code for implementing a PPO Critic network is provided in
+  the code Listing \ref{lst:ppo_critic}. The Critic class uses a dense
+  network to approximate value function $V(s)$. It learns by
+  minimizing the \gls{td} error which is the difference between the
+  current value and the return for the current batch. Its function is
+  similar to that of a DQN model. The gradient values could be clipped
+  through the \texttt{grad\_clip} argument of the constructor. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class PPOCritic():
+    def __init__(self, obs_shape, action_size,
+                 learning_rate=0.0003,
+                 gamma=0.99,
+                 grad_clip = None,
+                 model=None):
+        self.lr = learning_rate
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.gamma = gamma
+        self.grad_clip = grad_clip
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = tf.keras.models.clone_model(model)
+        self.optimizer = tf.keras.optimizers.Adam(self.lr)
+        
+    def __call__(self, state):
+        # input is a tensor
+        value = tf.squeeze(self.model(state))
+        return value
+    
+    def _build_model(self):
+        state_input = tf.keras.layers.Input(shape=self.obs_shape)
+        out = tf.keras.layers.Dense(64, activation="relu")(state_input)
+        out = tf.keras.layers.Dense(64, activation="relu")(out)
+        out = tf.keras.layers.Dense(64, activation="relu")(out)
+        net_out = tf.keras.layers.Dense(1)(out)
+        # Outputs single value for give state-action
+        model = tf.keras.models.Model(inputs=state_input, outputs=net_out)
+        model.summary()
+        return model
+        
+    def train(self, state_batch, disc_rewards):
+        with tf.GradientTape() as tape:
+            critic_weights = self.model.trainable_variables
+            critic_value = tf.squeeze(self.model(state_batch))
+            critic_loss = tf.math.reduce_mean(
+                        tf.square(disc_rewards - critic_value))
+            critic_grad = tape.gradient(critic_loss, critic_weights)
+            if self.grad_clip is not None:
+                critic_grad = [tf.clip_by_value(grad, \
+                     -1.0 * self.grad_clip, self.grad_clip) \
+                                    for grad in critic_grad]
+        # outside the gradient tape
+        self.optimizer.apply_gradients(zip(critic_grad, critic_weights))
+        return critic_loss.numpy()
+  \end{pygments}
+  \caption{Python code for PPO Critic Class}
+  \label{lst:ppo_critic}
+\end{listing}
+
+\subsubsection{PPO Agent Class}
+The Python code for implementing PPO Agent class is provided in the
+code Listing \ref{lst:ppo_agent}. The PPO agent class implements
+actor-critic architecture for implementation of the PPO algorithm. It
+creates an actor and a critic as an object of the two classes defined
+above.  The \texttt{policy} method samples an action from a normal
+distribution using the mean and standard deviation estimated with the
+actor network. The \texttt{train} functions divides the experience
+trajectories into batches to compute discounted returns and
+advantages. The function \texttt{compute\_advantage} estimates the
+advantage using the generalized advantage estimator (GAE) equation
+\eqref{eq:gae}. The discounted returns is used by the critic network
+to compute \gls{td} error needed for training. The advantage is used
+for training the actor network. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class PPOAgent:
+    def __init__(self, obs_shape, action_size, batch_size,
+                 action_upper_bound=1.0,
+                 lr_a=1e-3, lr_c=1e-3,
+                 gamma=0.99,            # discount factor
+                 lmbda=0.5,            # required for GAE
+                 beta=0.01,              # KL penalty coefficient
+                 epsilon=0.2,           # action clip boundary
+                 kl_target=0.01,        # required for KL penalty method
+                 entropy_coeff=0.01,     # entropy coefficient
+                 c_loss_coeff=0.01,      # critic loss coefficient
+                 grad_clip=None,
+                 method='clip',         # choose between 'clip' & 'penalty'
+                 actor_model=None,
+                 critic_model=None):
+        self.name='ppo'
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.actor_lr = lr_a
+        self.critic_lr = lr_c
+        self.batch_size = batch_size
+        self.gamma = gamma # discount factor
+        self.action_upper_bound = action_upper_bound
+        self.epsilon = epsilon # clip boundary for prob ratio
+        self.lmbda = lmbda # required for GAE
+        self.initial_beta = beta # required for penalty method
+        self.kl_target = kl_target # required for updating beta
+        self.method = method # choose between 'clip' & 'penalty'
+        self.c_loss_coeff = c_loss_coeff
+        self.entropy_coeff = entropy_coeff
+        self.grad_clip = grad_clip # apply gradient clipping
+        # Actor Model
+        self.actor = PPOActor(self.obs_shape, self.action_size,
+                              learning_rate=self.actor_lr, 
+                              action_upper_bound=self.action_upper_bound,
+                              epsilon=self.epsilon, 
+                              lmbda=self.lmbda,
+                              kl_target=self.kl_target, 
+                              beta=self.initial_beta, 
+                              entropy_coeff=self.entropy_coeff,
+                              critic_loss_coeff=self.c_loss_coeff,
+                              method=self.method, 
+                              grad_clip=self.grad_clip,
+                              model=actor_model)
+        # Critic Model
+        self.critic = PPOCritic(self.obs_shape, self.action_size,
+                               learning_rate=self.critic_lr,
+                                gamma=self.gamma,
+                                grad_clip=self.grad_clip,
+                                model=critic_model)
+
+        
+    def policy(self, state, greedy=False):
+        tf_state = tf.expand_dims(tf.convert_to_tensor(state), axis=0)
+        mean, std = self.actor(tf_state)
+        if greedy:
+            action = mean
+        else:
+            pi = tfp.distributions.Normal(mean, std)
+            action = pi.sample()
+            action = tf.reshape(action, shape=(self.action_size, ))
+        valid_action = tf.clip_by_value(action, -self.action_upper_bound, 
+                                        self.action_upper_bound)
+        return valid_action.numpy()
+    
+    def train(self, states, actions, rewards, next_states, dones, epochs=20):
+        states = tf.convert_to_tensor(states, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+        actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+        # compute advantage & discounted returns
+        target_values, advantages = self.compute_advantages(
+                              states, rewards, next_states, dones)
+        target_values = tf.convert_to_tensor(target_values, dtype=tf.float32)
+        advantages = tf.convert_to_tensor(advantages, dtype=tf.float32)
+        # current action probability distribution
+        mean, std = self.actor(states)
+        pi = tfp.distributions.Normal(mean, std)
+        n_split = len(rewards) // self.batch_size
+        assert n_split > 0, 'buffer length must be greater than batch_size'
+        indexes = np.arange(n_split, dtype=int)
+        # training
+        a_loss_list, c_loss_list, kl_list = [], [], []
+        for _ in range(epochs):
+            np.random.shuffle(indexes) 
+            for i in indexes:
+                old_pi = pi[i * self.batch_size: (i+1) * self.batch_size]
+                s_split = tf.gather(states, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                a_split = tf.gather(actions, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                tv_split = tf.gather(target_values, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                adv_split = tf.gather(advantages, indices=np.arange(
+                  i * self.batch_size, (i+1) * self.batch_size), axis=0)
+                # update critic
+                cl = self.critic.train(s_split, tv_split)
+                c_loss_list.append(cl)
+                # update actor
+                al = self.actor.train(s_split, a_split, \
+                                       adv_split, old_pi, cl)
+                a_loss_list.append(al)
+                kl_list.append(self.actor.kl_value)
+            # update lambda once in each epoch
+            if self.method == 'penalty':
+                self.actor.update_beta()
+        # end of epoch loop
+        actor_loss = np.mean(a_loss_list)
+        critic_loss = np.mean(c_loss_list)
+        kld_mean = np.mean(kl_list)
+        return actor_loss, critic_loss, kld_mean
+    
+    def compute_advantages(self, states, rewards, next_states, dones):
+        # input/output are tensors
+        s_values = self.critic(states)
+        ns_values = self.critic(next_states)
+        # advantage should have same shape as that of values
+        adv = np.zeros_like(s_values) 
+        returns = np.zeros_like(s_values)
+        discount = self.gamma
+        lmbda = self.lmbda
+        returns_current = ns_values[-1] # last value
+        g = 0 # GAE
+        for i in reversed(range(len(rewards))):
+            gamma = discount * (1. - dones[i])
+            td_error = rewards[i] + gamma * ns_values[i] - s_values[i]
+            g = td_error + gamma * lmbda * g
+            returns_current = rewards[i] + gamma * returns_current
+            adv[i] = g
+            returns[i] = returns_current
+        adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
+        return returns, adv
+    
+    @property
+    def penalty_coefficient(self):
+        # returns penalty coefficienty
+        return self.actor.beta
+  \end{pygments}
+  \caption{Python Class definition for PPO Agent}
+  \label{lst:ppo_agent}
+\end{listing}
+\subsubsection{Training a PPO agent}
+
+The function for training a PPO agent on a given Gym environment is
+provided in the code Listing \ref{lst:ppo_train}. The function
+\texttt{ppo\_train} first uses the function
+\texttt{collect\_trajectories} to generate trajectories with the
+agent's current policy. These trajectories constitute a
+\texttt{season} which is repeated for a number of times until desired
+performance is achieved. The trajectories collected in each season is
+used for training the PPO agent. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+def collect_trajectories(env, agent, tmax=1000, max_steps=200):
+    states, next_states, actions = [], [], []
+    rewards, dones = [], []
+    ep_count = 0        # episode count
+    state = env.reset()[0]
+    step = 0
+    for t in range(tmax):
+        step += 1
+        action = agent.policy(state)
+        next_state, reward, done, _, _ = env.step(action)
+        states.append(state)
+        actions.append(action)
+        next_states.append(next_state)
+        rewards.append(reward)
+        dones.append(done)
+        state = next_state
+        if max_steps is not None and step > max_steps:
+            done = True
+        if done:
+            ep_count += 1
+            state = env.reset()[0]
+            step = 0
+    return states, actions, rewards, next_states, dones, ep_count
+    
+ ppo_train(env, agent, max_buffer_len=1000, max_seasons=100, epochs=20,
+             max_steps=None, stop_score=None):
+    print('Environment name: ', env.spec.name)
+    print('RL Agent name:', agent.name)
+    best_score = -np.inf
+    season_scores = []
+    total_ep_cnt = 0
+    for s in range(max_seasons):
+        # collect trajectories
+        states, actions, rewards, next_states, dones, ep_count = \
+            collect_trajectories(env, agent, tmax=max_buffer_len, \
+                                             max_steps=max_steps)
+        total_ep_cnt += (ep_count+1)
+        # train the agent
+        a_loss, c_loss, kld_value = agent.train(states, actions, rewards,
+                          next_states, dones, epochs=epochs)
+        season_score = np.sum(rewards, axis=0) / (ep_count + 1)
+        season_scores.append(season_score)
+        if season_score > best_score:
+            best_score = season_score
+            agent.save_weights()
+        if stop_score is not None and season_score > stop_score:
+            print(f'Problem is solved in {s} seasons\
+                           or {total_ep_cnt} episodes.' )
+            break
+        print(f'season: {s}, episodes: {total_ep_cnt}, \
+               season_score: {season_score:.2f},\
+               avg_ep_reward: {np.mean(season_scores):.2f},\
+               best_score: {best_score:.2f}')
+    
+  \end{pygments}
+  \caption{Python code for training a PPO agent on a given Gym
+  environment}
+  \label{lst:ppo_train}
+\end{listing}
+\subsection{Solving Pendulum environment using PPO}
+The code for solving \texttt{Pendulum-v1} environment is shown in the
+code Listing \ref{lst:ppo_pendu}. The pendulum environment has a
+continuous action space along with a continuous observation space.
+The problem is solved in about 750 episodes when the average of last
+100 episodes exceeds -200. The performance of the algorithm is
+sensitive to choices of the user-defined parameters. The resulting
+training performance is shown in Figure \ref{fig:ppo_pendu}. This plot
+is generated by using WandB\footnotetext{\url{http://wandb.ai}}. 
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+env = gym.make('Pendulum-v1')
+obs_shape = env.observation_space.shape
+action_shape = env.action_space.shape
+action_size = action_shape[0]
+action_ub = env.action_space.high
+action_lb = env.action_space.low
+print('Observation shape: ', obs_shape)
+print('Action shape: ', action_shape)
+print('Max episodic Steps: ', env.spec.max_episode_steps)
+print('Action space bounds: ', (action_ub[0], action_lb[0]))
+                 
+# create a ppo agent
+ppo_agent = PPOAgent(obs_shape, action_size, 
+                     batch_size=200], 
+                     action_upper_bound=action_ub,
+                     entropy_coeff=0.0,
+                     c_loss_coeff=0.0,
+                     kl_target=0.01,
+                     gamma=0.99, beta=0.01,
+                     epsilon=0.1, lmbda=0.95,
+                    grad_clip=None,
+                    method='clip')
+                    
+# train the agent
+ppo_train(env, ppo_agent, max_buffer_len=10000, 
+      max_seasons=100, epochs=20, max_steps=200, stop_score=200)
+  \end{pygments}
+  \begin{framed}
+    \begin{tiny}
+   \begin{verbatim}
+Output:
+season: 0, episodes: 50, season_score: -1285.45, avg_ep_reward: -1285.45, best_score: -1285.45
+season: 1, episodes: 100, season_score: -1181.49, avg_ep_reward: -1233.47, best_score: -1181.49
+season: 2, episodes: 150, season_score: -1110.28, avg_ep_reward: -1192.40, best_score: -1110.28
+season: 3, episodes: 200, season_score: -1064.96, avg_ep_reward: -1160.54, best_score: -1064.96
+season: 4, episodes: 250, season_score: -1060.86, avg_ep_reward: -1140.61, best_score: -1060.86
+season: 5, episodes: 300, season_score: -982.23, avg_ep_reward: -1114.21, best_score: -982.23
+season: 6, episodes: 350, season_score: -946.48, avg_ep_reward: -1090.25, best_score: -946.48
+season: 7, episodes: 400, season_score: -853.93, avg_ep_reward: -1060.71, best_score: -853.93
+season: 8, episodes: 450, season_score: -831.43, avg_ep_reward: -1035.23, best_score: -831.43
+season: 9, episodes: 500, season_score: -676.64, avg_ep_reward: -999.38, best_score: -676.64
+season: 10, episodes: 550, season_score: -521.00, avg_ep_reward: -955.89, best_score: -521.00
+season: 11, episodes: 600, season_score: -379.70, avg_ep_reward: -907.87, best_score: -379.70
+season: 12, episodes: 650, season_score: -299.90, avg_ep_reward: -861.10, best_score: -299.90
+season: 13, episodes: 700, season_score: -234.21, avg_ep_reward: -816.33, best_score: -234.21
+season: 14, episodes: 750, season_score: -224.16, avg_ep_reward: -776.85, best_score: -224.16
+Problem is solved in 15 seasons or 800 episodes.   
+   \end{verbatim}
+ \end{tiny}
+  \end{framed}
+  \caption{Python Code for solving \texttt{Pendulum-v1} environment by
+using a PPO agent.}
+\label{lst:ppo_pendu}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.1]{./figures/chap06/ppo_pendulum.png}
+  \caption{PPO training performance for \texttt{Pendulum-v1}
+environment}
+  \label{fig:ppo_pendu}
+\end{figure}
+
+\subsection{Solving LunarLander-v2 Continuous with PPO}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+env = gym.make('LunarLander-v2', continuous=True)
+obs_shape = env.observation_space.shape
+action_shape = env.action_space.shape
+action_size = action_shape[0]
+action_ub = env.action_space.high
+action_lb = env.action_space.low
+print('environment name: ', env.spec.name)
+print('Observation shape: ', obs_shape)
+print('Action shape: ', action_shape)
+print('Max episodic Steps: ', env.spec.max_episode_steps)
+print('Action space bounds: ', (action_ub, action_lb))   
+
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='tanh')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(512, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
+
+a_model = create_actor_model(obs_shape, action_size)
+c_model = create_critic_model(obs_shape, action_size)
+
+ CFG = dict(
+    batch_size=200, 
+    entropy_coeff = 0.0,   # required for CLIP method
+    c_loss_coeff = 0.0,    # required for CLIP method
+    grad_clip = None,
+    method = 'clip', # choose between 'clip' or 'penalty'
+    kl_target = 0.01, # required for penalty method
+    beta = 0.01,  # required for penalty method
+    epsilon = 0.3,  # required for clip method
+    gamma = 0.99,
+    lam = 0.95,     # used for GAE
+    buffer_capacity = 20000, # next try with 50000
+    lr_a = 1e-3,
+    lr_c = 1e-3,
+    training_epochs=20,
+)
+
+agent = PPOAgent(obs_shape, action_size, 
+                     batch_size=20000, 
+                     action_upper_bound=action_ub,
+                     entropy_coeff=0.0,
+                     c_loss_coeff=0.0,
+                     kl_target=0.01,
+                     gamma=0.99, beta=0.01,
+                     epsilon=0.3, lmbda=0.95,
+                    grad_clip=None, method='clip',
+                    lr_a=1e-3, lr_c=1e-3,
+                    actor_model=a_model,
+                    critic_model=c_model)
+
+ppo_train(env, ppo_agent, max_buffer_len=CFG['buffer_capacity'], 
+              max_seasons=500,
+             epochs=CFG['batch_size'],
+             stop_score=200, max_steps=200, 
+             wandb_log=True)
+  \end{pygments}
+  \caption{Solving LunarLander-v2 with PPO}
+  \label{lst:llv2_ppo}
+\end{listing}
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.1]{./figures/chap06/ppo_lunarlander_v2_cont.png}
+  \caption{PPO training performance for
+    \texttt{LunarLander-v2-Continuous} environment}
+  \label{fig:ppo_lunarlander}
+\end{figure}
+
+\section{Summary}
+Policy gradient (PG) methods directly learn the policy function by maximizing a given objective function (cumulative reward function) and does not necessarily require learning Q function first as is the case with value-based methods. Usually the policy parameters are updated by using gradient-ascent method that requires computing the gradient of the objective function with respect to the policy parameters. Since, PG methods do not require Q function and use a gradient-based approach, it can be applied to solve problems continuous action spaces which was not possible with value-based methods. Then, we discuss a Monte-Carlo method called REINFORCE that updates the policy parameters only once in each episode by computing the return $G(t)$ function at the end of the episode (see \eqref{eq:mcup2}). This makes this approach \emph{sample-inefficient}. This can be overcome by using an \emph{actor-critic} approach that uses a separate Q function estimator instead of computing return thereby allowing parameter update at each step of the episode (see \eqref{eq:ac_pu}) More details of this approach will be discussed in the next chapter. Then, we discuss a popular policy gradient approach called DDPG that uses actor-critic model to concurrently learn a Q function and a policy. The critic network uses off-policy Bellman equation to learn Q function and the actor network learns the optimal policy by maximizing the output of the critic network. In other words DDPG extends Deep Q learning to continuous action spaces. DDPG algorithms can be sometimes unstable as no constraint is put on the value of the gradient being computed. Secondly, in some cases, it is not practical to explore all kinds of actions including bad ones to learn the optimal policy. TRPO methods avoids this by restricting policy updates to a safe region knows as \emph{trust-regions}. This trust region is defined by imposing a constraint on the KL divergence between the old and new policy. TRPO uses a complex approach to optimize policy by using a surrogate objective function while imposing this constraint. This is simplifed in PPO where the constraint is converted into a penalty term. The efficacy of these approaches are demonstrated by solving several problems with continuous spaces, namely, Pendulum and LunarLander.  
+ 

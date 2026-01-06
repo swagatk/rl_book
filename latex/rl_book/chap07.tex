@@ -1,0 +1,1390 @@
+\chapter{Actor-Critic Models}
+\index{Actor-Critic}
+\gls{ac} models are a class of reinforcement learning (RL) algorithms that combine the strengths of
+both policy-based (actor) and value-based (critic) methods. This hybrid approach aims to address the
+limitations of using each method individually. It has two components, namely, actor and critic. The
+actor is responsible for selecting actions based on the current state. It learns a policy function,
+often parameterized by $\theta$, which maps states to actions or a probability distribution over
+actions. The actor's goal is to improve its policy to maximize the expected cumulative reward. The
+critic's role is to evaluate the actions taken by the actor. It learns a value function, typically
+parameterized by $\phi$, which estimates the expected future rewards for a given state (state-value
+function, $V(s)$) or state-action pair (action-value function, $Q(s,a)$). The critic provides
+  feedback to the actor on how "good" its actions were.
+
+Actor-critic models are motivated by the desire to combine the advantages of policy-based and
+value-based methods while mitigating their individual limitations. Policy-based methods (e.g.
+REINFORCE) can handle continuous action spaces, learn stochastic policies (which is useful for
+exploration and in non-deterministic environments), and can directly optimize the policy. However,
+they suffers from high variance in gradient estimates because they rely on full episode returns.
+This high variance can lead to unstable training and slow convergence. On the other hand,
+value-based methods (e.g. Q-learning, SARSA) generally have low variance due to bootstrapping (using
+estimated values to update other estimated values). They are often more sample-efficient. However,
+these methods can only be applied to problems with discrete action spaces and typically learn
+deterministic policies. Actor-critic methods aim to gain the best of both worlds: the ability to
+handle continuous action spaces and learn stochastic policies (from the actor) combined with the
+reduced variance and improved stability from bootstrapping with a learned value function (from the
+critic).
+
+The use of actor-critic model in implementing algorithms such DDPG and PPO have already been
+discussed in the previous chapter. In this chapter, we will discuss the common architectures in more
+details. 
+
+\section{Naive Actor-Critic Model}\label{sec:naive_ac}
+\index{Actor-Critic!Naive}
+It is a simple version of actor-critic methods where the critic estimates the value function
+$V(s;w)$, and the actor updates the policy using the critic’s feedback, typically via policy
+gradients. The actor aims to maximize the expected cumulative reward, given by:
+\begin{equation}
+	J(\theta) = \mathbb{E}_{\pi_\theta} [G_0] 
+	\label{eq:nac_cost}
+\end{equation}
+where $G_0$ is the total discounted return from the initial state with:
+\begin{equation}
+	G_t = \left[\sum_{k=0}^{\infty}\gamma^kR_{t+k+1}\right]
+	\label{eq:nac_disc_return}
+\end{equation}
+Here, $\gamma \in[0, 1]$ is the discount factor, and $R_t$ is the reward received at time t. The actor updates its policy parameters $\theta$ by performing gradient ascent on this objective function. The Policy Gradient Theorem provides the fundamental basis for this update. A practical form of the gradient of $J(\theta)$ used for updating policy parameters is given by:
+\begin{equation}
+	\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}[\nabla_\theta\log\pi_\theta(a|s)Q^\pi(s,a)]
+	\label{eq:nac_pg_update}
+\end{equation}
+
+
+\subsection{Temporal Difference (TD) Error}
+In the Naive Actor-Critic algorithm, we approximate $Q^\pi(s,a)$ with the critic's estimate
+$Q_w(s,a)$ (or $V_w(s)$) along with the immediate reward. The critic learns its value function by
+minimizing the difference between its current estimate and a more "bootstrapped" estimate of the
+value. This difference is known as the Temporal Difference (TD) error. For a state-value function
+$V_w(s)$, the one-step TD error is:
+
+\begin{equation}
+	\delta_t = R_{t+1} +\gamma V_w(S_{t+1}) - V_w(S_t)
+	\label{eq:nac_td_error}
+\end{equation}
+where $S_t$ is the state at time $t$, $A_t$ is the action taken, and $R_{t+1}$ is the reward
+received after taking action $A_t$ and transitioning to $S_{t+1}$.
+
+If the critic estimates an action-value function $Q_w(s,a)$, the TD error (similar to SARSA) would be: 
+\begin{equation}
+	\delta_t = R_{t+1} + \gamma Q_w(S_{t+1}, A_{t+1}) - Q_w(S_t,A_t)
+	\label{eq:nac_td_error_q}
+\end{equation}
+The TD error serves as the signal for both the critic and the actor. 
+
+\subsection{Advantage Function} \label{sec:nac_adv}
+To improve the stability and performance of policy gradient methods, the concept of an advantage
+function is often used. The advantage function $A^\pi(s,a)$ measures how much better an action $a$
+is compared to the average value of the state s under policy $\pi$:
+
+\begin{equation}
+	A^\pi(s,a) = Q^\pi(s,a) - V^\pi(s)
+	\label{eq:nac_adv}
+\end{equation}
+When using the advantage function, the policy gradient update becomes:
+\begin{equation}
+	\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}[\nabla_\theta\log\pi_\theta(a|s)A^\pi(s,a)]
+	\label{eq:nac_pg_update_adv}
+\end{equation}
+In the Naive Actor-Critic, the TD error itself can be seen as an estimate of the advantage function.
+This is because $R_{t+1}+\gamma V_w(S_{t+1})$ can be viewed as a noisy estimate of $Q_w(S_t, A_t)$
+for the taken action, and $V_w(S_t)$ is the baseline. So, $\delta_t \approx Q_w(S_t,A_t) -
+V_w(S_t)$. The pseudocode for naive actor-critic algorithm is provided in Table \ref{alg:nac}. 
+
+\begin{algorithm}[htbp]
+	\caption{Actor-Critic Algorithm}
+	\label{alg:nac}
+	\begin{algorithmic}[1]
+		\State input: Policy parameters $\theta$, value function parameters $w$. Learning rates $\alpha_\theta$, $\alpha_w$, discount factor $\gamma$.
+		\For {each episode}
+		\State Initialize $s_t$
+		\While{episode not done}
+		\State Sample action $a_t \sim \pi(a|s;\theta)$
+		\State Take action $a_t$, obtain reward $r_t$, transition to new state $s_{t+1}$
+		\State Compute TD error: $\delta_t = R_{t+1} +\gamma V(S_{t+1};w) - V(s_t;w)$
+		\State Update Critic: $w \leftarrow w + \alpha_w \delta_t \nabla_w V(s_t;w)$ 	\Comment{Critic Update}
+		\State Update Actor: $\theta \leftarrow \theta + \alpha_\theta \delta_t \nabla_\theta \log \pi(a|s;\theta)$ \Comment{Actor Update}
+		\State $s_t \leftarrow s_{t+1}$
+		\EndWhile
+		\EndFor
+	\end{algorithmic}
+\end{algorithm}
+
+\subsection{Advantages of Actor-Critic Algorithm}
+Actor critic methods can provide the following advantages in general:
+\begin{itemize}
+\item Reduced Variance: Compared to pure policy gradient methods (like REINFORCE), the critic's
+  value estimate acts as a learned baseline, significantly reducing the variance of the policy
+  gradient estimate. 
+\item Continuous Action Spaces: Actor-critic methods can easily handle continuous action spaces by
+  having the actor output parameters of a continuous probability distribution.
+
+\item On-policy Learning: The critic learns about the policy currently being followed by the actor,
+  providing more relevant feedback.
+\end{itemize}
+
+\subsection{Limitations of Naive Actor-Critic Algorithm}
+\begin{itemize}
+   \item Bias from Critic Approximation: If the critic's value estimate is inaccurate, it can
+     introduce bias into the policy gradient, leading to suboptimal policies.  
+   \item Convergence Issues: The interaction between the actor and critic can be unstable, sometimes
+     leading to convergence problems.  
+   \item Sample Inefficiency: While better than pure policy gradient, it
+     can still be sample-inefficient compared to off-policy methods.  
+ \end{itemize} 
+
+ The ``naive'' actor-critic algorithm generally uses a $Q(s,a)$ or $V(s)$ estimate directly for
+ actor update as given below:
+ \begin{equation}
+   \theta \leftarrow \theta + \alpha_\theta \nabla_\theta \log \pi(a|s;\theta) V(s_t;w)   
+   \label{eq:nac_actor_update}
+ \end{equation}
+This, however, can be quite unstable and may exhibit high variance. Therefore, TD error is used for
+updating actor parameters to reduce the variance. The resulting actor update equation is given by
+\begin{equation}
+   \theta \leftarrow \theta + \alpha_\theta \nabla_\theta \log \pi(a|s;\theta) \delta_t   
+  \label{eq:nac_actor_update_2}
+\end{equation}
+
+\subsection{Python Code for implementing Actor-Critic Algorithm}
+The python code for creating actor and critic classes are provided in the code listing
+\ref{lst:nac_actor} and \ref{lst:nac_critic} respectively. This code can be used to solve problems
+with discrete action spaces only. The actor and critic classes use a sequential deep network to
+estimate policy $\pi(s)$ and value function $V(s)$ respectively. The actor network returns the
+action probabilities for a given input state $s$.  The actor class also provides a method to
+computer actor loss from the TD error and action log probabilities as explained in Section
+\ref{sec:nac_adv}. The negative sign in the loss function indicates that the actor is optimized by
+maximizing this loss function.  The code for the actor-critic agent is provided in the code listing
+\ref{lst:nac_agent}. It provides the \texttt{train()} method to update both policy and critic
+parameters after each step of episode. 
+
+\begin{listing}
+	\begin{pygments}[frame=single, indent=L]{python}
+class Actor():
+	def __init__(self, obs_shape, action_size, lr=1e-4, model=None):
+		self.obs_shape = obs_shape
+		self.action_size = action_size
+		self.lr = lr
+		if model is None:
+		self.model = self._build_model()
+		else:
+		self.model = model 
+		self.optimizer = tf.keras.optimizers.Adam(
+               learning_rate=self.lr)
+
+
+	def _build_model(self): # outputs action probabilities
+		sinput = tf.keras.layers.Input(shape=self.obs_shape)
+		x = tf.keras.layers.Dense(512, activation='relu',
+		   kernel_initializer=tf.keras.initializers.HeUniform())(sinput)
+		x = tf.keras.layers.Dense(512, activation='relu',
+		   kernel_initializer=tf.keras.initializers.HeUniform())(x)
+		aout = tf.keras.layers.Dense(self.action_size, 
+         activation='softmax',
+		   kernel_initializer=tf.keras.initializers.HeUniform())(x)
+		model = tf.keras.models.Model(sinput, aout, name='actor')
+		model.summary()
+		return model
+
+	def __call__(self, states):
+		# returns action probabilities for each state
+		pi = tf.squeeze(self.model(states))
+		return pi
+
+	def compute_actor_loss(self, states, actions, td_error):
+		pi = self.model(states)
+		action_dist = tfp.distributions.Categorical(
+            probs=pi, dtype=tf.float32)
+		log_prob = action_dist.log_prob(actions)
+		actor_loss = -log_prob * td_error
+		return tf.math.reduce_mean(actor_loss)				
+	  \end{pygments}
+	\caption{Python code for creating Actor Class}
+	\label{lst:nac_actor}
+\end{listing}
+
+\begin{listing}
+	\begin{pygments}[frame=single, indent=L]{python}
+class Critic():
+    def __init__(self, obs_shape,
+                lr = 1e-4, gamma=0.99, model=None):
+        self.obs_shape = obs_shape
+        self.gamma = gamma
+        self.lr = lr
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = model
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
+
+
+    def _build_model(self): # returns V(s)
+        sinput = tf.keras.layers.Input(shape=self.obs_shape)
+        x = tf.keras.layers.Dense(128, activation='relu')(sinput)
+        x = tf.keras.layers.Dense(256, activation='relu')(x)
+        x = tf.keras.layers.Dense(256, activation='relu')(x)
+        vout = tf.keras.layers.Dense(1, activation='relu')(x) 
+        model = tf.keras.models.Model(inputs= sinput, outputs=vout, 
+                                      name='critic')
+        model.summary()
+        return model
+
+    def __call__(self, states):
+        # returns V(s) for each state
+        value = tf.squeeze(self.model(states))
+        return value
+	\end{pygments}
+	\caption{Python code for creating Critic Class}
+	\label{lst:nac_critic}
+\end{listing}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class ACAgent():
+    def __init__(self, obs_shape, action_size, 
+                lr_a=1e-4, lr_c=1e-4, gamma=0.99,
+                a_model=None, c_model=None):
+        self.obs_shape = obs_shape
+        self.action_size = action_size
+        self.gamma = gamma
+        self.lr_a = lr_a
+        self.lr_c = lr_c
+        self.name = 'actor-critic'
+
+        # actor model
+        self.actor = Actor(self.obs_shape, self.action_size,
+                          lr=self.lr_a, model=a_model)
+        # critic model
+        self.critic = Critic(self.obs_shape, lr=self.lr_c, 
+                             gamma=self.gamma, model=c_model)
+
+    def policy(self, state):
+        state = tf.expand_dims(
+            tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
+        pi = self.actor(state) # action probabilities
+        action_dist = tfp.distributions.Categorical(
+                              probs=pi, dtype=tf.float32)
+        action = action_dist.sample()
+        return int(action.numpy())
+
+
+    def train(self, state, action, reward, next_state, done):
+        state = tf.expand_dims(
+               tf.convert_to_tensor(state, dtype=tf.float32), axis=0)
+        action= tf.convert_to_tensor(action, dtype=tf.float32)
+        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
+        next_state = tf.expand_dims(
+               tf.convert_to_tensor(next_state, dtype=tf.float32), 
+               axis=0)
+        done = tf.convert_to_tensor(done, dtype=tf.float32)
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            value = self.critic(state)
+            next_value = self.critic(next_state)
+            td_target = reward + self.gamma * next_value * (1 - done)
+            td_error = td_target - value
+            a_loss = self.actor.compute_actor_loss(state, action, td_error)
+            c_loss = tf.math.reduce_mean(tf.square(td_target - value))
+
+        actor_grads = tape1.gradient(a_loss, 
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(c_loss, 
+                     self.critic.model.trainable_variables)
+        self.actor.optimizer.apply_gradients(zip(actor_grads, 
+                              self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(zip(critic_grads, 
+                           self.critic.model.trainable_variables))
+        return a_loss, c_loss
+  \end{pygments}
+  \caption{Python Code for Actor-Critic Agent Class}
+    \label{lst:nac_agent}
+\end{listing}
+
+\subsubsection{Solving CartPole problem using Naive Actor-Critic Algorithm}
+The Python function for training a Gym environment problem using a naive actor-critic agent is
+provided in code Listing \ref{lst:nac_train}. The main function that uses this train function to
+solve \texttt{CartPole-v1} environment is provided in code Listing \ref{lst:nac_cpv1} along with the
+console output. The corresponding training performance plot is shown in Figure \ref{fig:nac_cpv1}.
+It can be seen that the episodic reward is steadily increasing with training episodes. This problem
+is considered solved when the episodic reward crosses 499. So, the problem gets solved in about 400
+episodes with best score graph crossing this mark.
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+def train(env, agent, max_episodes=10000, log_freq=50, 
+            min_score=-200, max_score=200,
+             stop_score=200):
+
+    print('Environment name: ', env.spec.id)
+    print('RL Agent name:', agent.name)
+    
+    assert isinstance(env.action_space, gym.spaces.Discrete),\
+                "AC Agent only for discrete action spaces"
+
+    ep_scores = []
+    best_score = -np.inf
+    for e in range(max_episodes):
+        done = False
+        state = env.reset()[0]
+        ep_score = 0
+        a_losses, c_losses = [], []
+        while not done:
+            action = agent.policy(state)
+            next_state, reward, done, _, _ = env.step(action)
+            a_loss, c_loss = agent.train(state, action, 
+                                 reward, next_state, done)
+            a_losses.append(a_loss)
+            c_losses.append(c_loss)
+            state = next_state
+            ep_score += reward
+        # while loop ends here
+        ep_scores.append(ep_score)
+
+        if e % log_freq == 0:
+            print(f'e:{e}, ep_score:{ep_score:.2f}, 
+                     avg_ep_score:{np.mean(ep_scores):.2f},\
+                        avg100score:{np.mean(ep_scores[-100:]):.2f}, \
+                           best_score:{best_score:.2f}')
+
+        if ep_score > best_score:
+            best_score = ep_score
+            agent.save_weights()
+            print(f'Best Score: {ep_score}, episode: {e}. Model saved.')
+
+        if np.mean(ep_scores[-100:]) > stop_score:
+            print('The problem is solved in {} episodes'.format(e))
+            break
+    # for loop ends here
+  \end{pygments}
+  \caption{Function for training an actor-critic agent for a given Gym environment}
+  \label{lst:nac_train}
+\end{listing}
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+from actor_critic import ACAgent 
+if __name__ == '__main__':
+    env = gym.make('CartPole-v1')
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    print("Observation shape: ", obs_shape)
+    print("Action Size: ", action_size)
+    print("Max Episode steps: ", env.spec.max_episode_steps)
+
+    # create an RL agent
+    agent = ACAgent(obs_shape, action_size)
+
+    # train the RL agent on
+    train(env, agent, max_episodes=1500, log_freq=100, 
+             stop_score=499)
+  \end{pygments}
+  \begin{framed}
+    \begin{scriptsize}
+    \begin{verbatim}
+Output:
+Best score:67.0, episode:0. Model Saved!
+e:0, ep_score:67.00, avg_ep_score:67.00, avg100score:67.00, best_score:67.00
+Best score:96.0, episode:29. Model Saved!
+e:100, ep_score:38.00, avg_ep_score:34.75, avg100score:34.43, best_score:96.00
+Best score:190.0, episode:129. Model Saved!
+e:200, ep_score:46.00, avg_ep_score:46.21, avg100score:57.78, best_score:190.00
+Best score:199.0, episode:216. Model Saved!
+Best score:243.0, episode:234. Model Saved!
+Best score:347.0, episode:263. Model Saved!
+Best score:387.0, episode:274. Model Saved!
+e:300, ep_score:124.00, avg_ep_score:76.65, avg100score:137.85, best_score:387.00
+Best score:863.0, episode:316. Model Saved!
+e:400, ep_score:134.00, avg_ep_score:102.75, avg100score:181.29, best_score:863.00
+e:500, ep_score:201.00, avg_ep_score:125.70, avg100score:217.75, best_score:863.00
+e:600, ep_score:130.00, avg_ep_score:141.93, avg100score:223.20, best_score:863.00
+e:700, ep_score:200.00, avg_ep_score:159.75, avg100score:266.90, best_score:863.00
+    \end{verbatim}
+  \end{scriptsize}
+  \end{framed}
+  \caption{Python code for training an actor-critic agent to solve the \texttt{CartPole-v1}
+  problem.}
+    \label{lst:nac_cpv1}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.1]{./figures/chap07/cartpole_v1_nac.png}
+  \caption{Performance of Naive Actor Critic Algorithm in solving \texttt{CartPole-v1} problem.}
+  \label{fig:nac_cpv1}
+\end{figure}
+
+\subsubsection{Solving Lunar Lander Problem using Naive Actor-Critic Algorithm}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+from actor_critic import ACAgent 
+if __name__ == '__main__':
+    env = gym.make('LunarLander-v3')
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    print("Observation shape: ", obs_shape)
+    print("Action Size: ", action_size)
+    print("Max Episode steps: ", env.spec.max_episode_steps)
+
+    # create an RL agent
+    agent = ACAgent(obs_shape, action_size)
+
+    # train the RL agent on
+    train(env, agent, max_episodes=1500, min_score=-500, log_freq=100, 
+             stop_score=200)
+  \end{pygments}
+  \begin{framed}
+    \begin{verbatim}
+    Output:
+    provide console output
+    
+    \end{verbatim}
+  \end{framed}
+  \caption{Python code for training a actor-critic agent to solve the \texttt{LunarLander-v3}
+  problem.}
+    \label{lst:nac_ll}
+\end{listing}
+
+
+\section{Advantage Actor-Critic (A2C) Algorithm} \label{sec:a2c}
+\index{Actor-Critic!Advantage Actor-Critic (A2C)}
+In Advantage actor-critic algorithm, Advantage function $A(s,a)$ is used directly to update the
+actor parameters instead of using raw TD error values which is more noisy. If TD error is used as an estimate
+of the advantage function as done in the previous section, there is no particular difference between
+A2C and naive actor-critic algorithm discussed above. To encourage exploration and prevent premature
+convergence to suboptimal policies, an entropy term is often added to the actor loss given by:
+
+\begin{equation}
+  H(\pi_\theta) = - \sum_a \pi_\theta(a|s_t)\log \pi_\theta(a|s_t)
+  \label{eq:entropy}
+\end{equation}
+
+Therefore the combined actor loss becomes:
+\begin{equation}
+  L_{actor}(\theta) = -\log\pi_\theta(a_t|s_t).A(s_t, a_t) - \beta H(\pi_\theta)
+  \label{eq:a2c_actor_loss}
+\end{equation}
+
+Rather than updating the actor and critic parameters after each episode, the training updates can be
+carried out in a batch mode by collecting trajectories for a fixed number of time steps. The
+pseudocode of A2C algorithm is provided in Algorithm \ref{alg:a2c}.
+
+\begin{algorithm}[htbp]
+  \caption{Advantage Actor-Critic (A2C) Algorithm}
+	\label{alg:a2c}
+	\begin{algorithmic}[1]
+     \scriptsize
+		\State input: Policy parameters $\theta$, value function parameters $w$. Learning rates
+      $\alpha_\theta$, $\alpha_w$, discount factor $\gamma$ and entropy coefficient $\beta$.
+      \For {each iterative step}
+         \State Collect trajectories with transitions ${(s_t, a_t, r_t, s_{t+1}, d)}$ for
+         $t=0,1,\ldots, T$ with $a_t \sim \pi(s_t;\theta)$. 
+      \For {each trajectory (or episode)}
+      \State Compute Advantage: 
+         \begin{equation}
+           A(s_t,a_t) = r_{t+1} + \gamma V(s_{t+1};w) * (1-d)-V(s_t;w)
+           \label{eq:adv_tde}
+         \end{equation}
+         \Comment{$A(s_t,a_t) \approx \delta_t$, TD error }
+         \State Update Critic: 
+         \begin{equation}
+           w \leftarrow w + \alpha_w \nabla_w V(s_t;w) A(s,a)
+           \label{eq:a2c_c_update}
+         \end{equation}
+
+         \Comment{Critic minimises TD error}
+		   \State Update Actor: 
+         \begin{equation}
+           \theta \leftarrow \theta + \alpha_\theta \nabla_\theta \log
+            \pi(a|s;\theta) A(s,a) + \beta H(\pi_\theta(s_t)) 
+           \label{eq:a2c_a_update}
+         \end{equation}
+         \Comment{maximises actor loss function \eqref{eq:a2c_actor_loss}}
+      \EndFor
+		\EndFor
+	\end{algorithmic}
+\end{algorithm}
+
+
+
+\subsection{Python Implementation of A2C Algorithm}
+The \texttt{A2CAgent} class implements the algorithm shown in the Algorithm Table \ref{alg:a2c}. The
+actor and critic classes remain same as with the previous naive actor-critic implementation.  The
+method \texttt{compute\_advantages()} uses TD error to estimate the advantage function from the
+state transition information $\{s_t, a_t, r_t, s_{t+1},d\}$ collected during exploration as shown in
+equation \eqref{eq:adv_tde}. The method \texttt{compute\_actor\_loss()} computes the combined loss
+function given by equation \eqref{eq:a2c_actor_loss}. This function uses
+\texttt{tensorflow\_probability} package to compute log probability and entropy values.
+The \texttt{train()} method computes advantages, actor and critic loss functions for each episode
+and updates the actor and critic parameters using built-in optimizer. The negative sign with the
+actor loss function indicates that the actor loss is maximized contrast to the critic loss which is
+minimized.  The complete python code for implementing \texttt{A2CAgent} class is provided in the
+listing \ref{lst:a2c_agent}. 
+
+It is observed that computing TD error as the difference between the discounted return and the current
+value estimate provides better performance compared to the standard method that requires storing
+both $s_t$ and $s_{t+1}$. The method to compute discounted rewards and actor loss function is
+provided in the code listing \ref{lst:tde_dr}.  
+
+The method \texttt{a2c\_train()} provided in code listing \ref{lst:a2c_train} shows how one can
+train an A2C agent on a given gym environment. As we can see in this code, the agent is trained
+after each episode indicating a batch mode of training unlike the implementation in the previous
+section that updated the models after each step. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import tensorflow_probability as tfp
+class A2CAgent:
+    def __init__(self, obs_shape, action_size, 
+                 lr_a=1e-4, lr_c=1e-3, gamma=0.99,
+                 entropy_beta=0.01, grad_clip_norm=5.0,
+                 a_model=None, c_model=None):
+        self.lr_a = lr_a
+        self.lr_c = lr_c
+        self.entropy_beta = entropy_beta
+        self.grad_clip_norm = grad_clip_norm
+        
+        self.gamma = gamma
+        self.action_size = action_size
+        self.obs_shape = obs_shape
+        self.name = 'A2C_v2'
+
+        # create actor and critic networks
+        self.actor = Actor(obs_shape, action_size, lr=self.lr_a,
+                           model=a_model)
+        self.critic = Critic(obs_shape, lr=self.lr_c,
+                             gamma=self.gamma, model=c_model)
+
+    def policy(self, state):
+        state = tf.expand_dims(
+            tf.convert_to_tensor(state, dtype=tf.float32), 
+               axis=0)
+        pi = self.actor(state)
+        pi_np = pi.numpy()
+        action_probs = tfp.distributions.Categorical(probs=pi)
+        action = action_probs.sample()
+        return action.numpy()
+    
+    def compute_advantages(self, rewards, values, next_values, dones):
+        advantages = rewards + \
+            self.gamma * next_values * (1.0 - dones) - values
+        # normalize advantages
+        advantages = (advantages - np.mean(advantages)) 
+                     / (np.std(advantages) + 1e-8)
+        return advantages
+
+    def compute_actor_loss(self, states, actions, advantages):
+        probs = self.actor(states)
+        action_dist = tfp.distributions.Categorical(
+                           probs=probs, dtype=tf.float32)
+        log_probs = action_dist.log_prob(actions)
+        actor_loss = -tf.reduce_mean(log_probs * advantages)
+
+        # entropy regularization
+        entropy = action_dist.entropy() 
+        actor_loss -= self.entropy_beta * tf.reduce_mean(entropy)
+        return actor_loss
+
+        
+    def train(self, states, actions, rewards, next_states, dones):
+        states = np.array(states, dtype=np.float32)
+        actions = np.array(actions, dtype=np.int32)
+        rewards = np.array(rewards, dtype=np.float32)
+        next_states = np.array(next_states, dtype=np.float32)
+        dones = np.array(dones, dtype=np.float32)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            next_values = self.critic(next_states)
+            advantages = self.compute_advantages(
+                        rewards, values, next_values, dones)
+            actor_loss = self.compute_actor_loss(states, 
+                                             actions,advantages)
+            critic_loss = tf.reduce_mean(tf.square(advantages))
+
+        # compute gradients 
+        actor_grads = tape1.gradient(actor_loss, 
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss, 
+                     self.critic.model.trainable_variables)
+
+        # apply gradients to the models
+        self.actor.optimizer.apply_gradients(
+            zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(
+            zip(critic_grads, self.critic.model.trainable_variables))
+        return actor_loss.numpy(), critic_loss.numpy()
+  \end{pygments}
+  \caption{Python Code for implementing A2C agent class}
+  \label{lst:a2c_agent}
+\end{listing}
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class A2CAgent():
+    def init(self):
+        pass
+
+    def policy(self, state):
+        pass
+
+    def compute_discounted_rewards(self, states, actions, rewards):
+        discounted_rewards = []
+        sum_rewards = 0
+        for r in reversed(rewards):
+            sum_rewards = r + self.gamma * sum_rewards
+            discounted_rewards.insert(0, sum_rewards)
+        discounted_rewards = np.array(discounted_rewards)
+        states = np.array(states, dtype=np.float32)
+        actions = np.array(actions, dtype=np.int32)
+        return states, actions, discounted_rewards
+
+
+    def compute_actor_loss(self, states, actions, td_error):
+        probs = self.actor(states)
+        action_dist = tfp.distributions.Categorical(
+               probs=probs, dtype=tf.float32)
+        log_probs = action_dist.log_prob(actions)
+        actor_loss = -tf.reduce_mean(log_probs * td_error)
+        # entropy regularization
+        entropy = action_dist.entropy() 
+        actor_loss -= self.entropy_beta * tf.reduce_mean(entropy)
+        return actor_loss
+
+    def train(self, states, actions, rewards):
+        states, actions, discnt_rewards = \
+              self.compute_discounted_rewards(states, actions, rewards)
+        discnt_rewards = tf.convert_to_tensor(
+                           discnt_rewards, dtype=tf.float32)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            td_error = tf.math.subtract(discnt_rewards, values)
+            actor_loss = self.actor.compute_actor_loss(states, 
+                                                actions, td_error)
+            critic_loss = tf.reduce_mean(tf.square(td_error))
+
+        actor_grads = tape1.gradient(actor_loss, 
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss, 
+                     self.critic.model.trainable_variables)
+
+        self.actor.optimizer.apply_gradients(
+                  zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(
+                  zip(critic_grads, self.critic.model.trainable_variables))
+        return actor_loss.numpy(), critic_loss.numpy()
+
+  \end{pygments}
+  \caption{Code for computing TD error from discounted returns}
+  \label{lst:tde_dr}
+\end{listing}
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+def a2c_train(env, agent, max_episodes=10000, log_freq=50, 
+               max_score=None, min_score=None, 
+               stop_score=500):
+    print('Environment name: ', env.spec.id)
+    print('RL Agent name:', agent.name)
+    
+    assert isinstance(env.action_space, gym.spaces.Discrete),\
+                "A2C Agent only for discrete action spaces"
+
+    ep_scores = []
+    best_score = -np.inf
+    for e in range(max_episodes):
+        states, actions, rewards = [], [], []
+        done = False
+        state = env.reset()[0]
+        ep_score = 0
+        while not done:
+            action = agent.policy(state)
+            next_state, reward, done, _, _ = env.step(action)
+            rewards.append(reward)
+            states.append(state)
+            actions.append(action)
+            state = next_state
+            ep_score += reward
+
+            if max_score is not None and 
+                     ep_score >= max_score:
+                done = True
+            if min_score is not None and 
+                     ep_score <= min_score:
+                done = True
+
+            if done: 
+                ep_scores.append(ep_score)
+                # train the agent
+                a_loss, c_loss = agent.train(states, actions, rewards)
+
+        # while loop ends here
+
+        if e % log_freq == 0:
+            print(f'e:{e}, ep_score:{ep_score:.2f},\ 
+              avg_ep_score:{np.mean(ep_scores):.2f},\
+               avg100score:{np.mean(ep_scores[-100:]):.2f}, \
+                best_score:{best_score:.2f}')
+        
+        if ep_score > best_score:
+            best_score = ep_score
+            agent.save_weights()
+            print(f'Best Score: {ep_score}, episode: {e}. Model saved.')
+
+    # for loop ends here
+  \end{pygments}
+  \caption{Training function for an A2C agent}
+  \label{lst:a2c_train}
+\end{listing}
+\subsection{Solving \texttt{LunarLander-v3} with A2C algorithm}
+
+The main code for training an A2C agent to solve Gymnasium's \texttt{LunarLander-v3} problem is
+provided in the listing \ref{lst:ll_a2c}. The actor and critic networks are created externally and
+passed to the \texttt{A2CAgent} object. To speed up training, the episodes are truncated when the
+total episodic score goes beyond the range $[-300, 500]$. The resulting training performance plot is
+shown in Figure \ref{fig:a2c_llv3}. It can be seen that the best score exceeds 200 which is required
+for solving the problem successfully. However, the running average of last 100 episodes reaches
+around 0 after about 1500 episode. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym 
+# create actor & Critic models
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
+
+if __name__ == '__main__':
+    # Create Gym environment 
+    env = gym.make('LunarLander-v3', render_mode='rgb_array')
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    print("Observation shape: ", obs_shape)
+    print("Action Size: ", action_size)
+    print("Max Episode steps: ", env.spec.max_episode_steps)
+
+    actor_net = create_actor_model(obs_shape, action_size)
+    critic_net = create_critic_model(obs_shape)
+
+    # create an RL agent
+    agent = A2CAgent(obs_shape, action_size, 
+                   a_model=actor_net,  c_model=critic_net)
+
+    # train the RL agent on
+    a2c_train(env, agent, max_episodes=1500, log_freq=100, 
+         stop_score=200, max_score=500, min_score=-300)
+  \end{pygments}
+  \begin{framed}
+    \begin{scriptsize}
+    \begin{verbatim}
+Best score:-286.7096895045363, episode:0. Model Saved!
+e:0, ep_score:-286.71, avg_ep_score:-286.71, avg100score:-286.71, best_score:-286.71
+Best score:-278.85662087282384, episode:2. Model Saved!
+Best score:7.116470473337458, episode:3. Model Saved!
+Best score:23.33927428594974, episode:10. Model Saved!
+Best score:100.85838120915994, episode:20. Model Saved!
+Best score:166.68768124754476, episode:21. Model Saved!
+Best score:167.36705054863853, episode:31. Model Saved!
+Best score:211.82154501357178, episode:41. Model Saved!
+Best score:221.82705954781403, episode:49. Model Saved!
+Best score:236.63119714607453, episode:57. Model Saved!
+Best score:249.53318413060276, episode:71. Model Saved!
+Best score:255.81425819686874, episode:72. Model Saved!
+e:100, ep_score:-133.23, avg_ep_score:-83.00,  avg100score:-80.96, best_score:255.81
+e:200, ep_score:-121.24, avg_ep_score:-109.77, avg100score:-136.81, best_score:255.81
+e:300, ep_score:-144.85, avg_ep_score:-116.23, avg100score:-129.22, best_score:255.81
+e:400, ep_score:-121.21, avg_ep_score:-120.69, avg100score:-134.12, best_score:255.81
+e:500, ep_score:-124.12, avg_ep_score:-122.79, avg100score:-131.17, best_score:255.81
+e:600, ep_score:-113.23, avg_ep_score:-124.91, avg100score:-135.57, best_score:255.81
+e:700, ep_score:-180.10, avg_ep_score:-124.89, avg100score:-124.78, best_score:255.81
+e:800, ep_score:-157.82, avg_ep_score:-125.42, avg100score:-129.12, best_score:255.81
+e:900, ep_score:-108.00, avg_ep_score:-126.25, avg100score:-132.86, best_score:255.81    
+    \end{verbatim}
+  \end{scriptsize}
+  \end{framed}
+  \caption{Main function for applying A2C agent to solve \texttt{LunarLander-v3} problem}
+  \label{lst:ll_a2c}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.1]{./figures/chap07/lunarlander_v3_a2c.png}
+  \caption{Training performance of A2C algorithm for \texttt{Lunarlander-v3} environment}
+  \label{fig:a2c_llv3}
+\end{figure}
+
+\section{Asynchronous Advantage Actor-Critic (A3C) Model} \label{sec:a3c}
+\index{Actor-Critic!Asynchronous Advantage Actor-Critic (A3C)}
+In A2C, a single agent interacts with the environment, collects a batch of experience (e.g., a few
+steps or a full episode), computes the losses for both actor and critic based on this batch, and
+then updates the agent's network parameters. It is also possible to have
+multiple workers to collect experiences from different parallel environments and
+performs a single coordinate update to the shared network parameters of the agent.
+
+\gls{a3c} \cite{sewak2019actor} was a breakthrough in deep reinforcement learning, primarily because
+it enabled highly efficient training on multi-core CPUs without requiring a replay buffer (like in
+DQN). The "Asynchronous" aspect is key. A3C maintains a global network (actor and critic) and
+multiple "worker" agents. Each worker agent has its own copy of the network parameters and interacts
+with its own independent copy of the environment. Each of the multiple parallel worker agents
+running in separate threads collects its own experience tuples $(s,a,r,s')$  independently.
+Crucially, each worker computes gradients for its local network parameters based on its collected
+experience. Instead of waiting for other workers, it asynchronously sends these gradients to the
+global network to update the global parameters. Periodically, or after a certain number of steps,
+each worker agent synchronizes its local network parameters with the updated global network
+parameters. This ensures that all workers are learning from the collective experience without being
+perfectly in sync. The schematic block diagram of A3C architecture is shown in Figure
+\ref{fig:a3c_bd}.  
+
+The mathematical equations for the actor and critic losses are fundamentally the same as in A2C, as
+they both use the advantage function. The difference lies in how the updates are performed.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[scale=0.3]{./figures/chap07/a3c_bd.png}
+  \caption{Block Diagram to understand A3C architecture}
+  \label{fig:a3c_bd}
+\end{figure}
+
+\subsection{Python Implementation of A3C Model}
+
+\subsubsection{The \texttt{worker} function}
+
+The Python code for implementing a worker is provided in the listing \ref{lst:a3c_worker}. The
+\texttt{worker} function creates a local \texttt{A2CAgent} referred to as \texttt{local\_network}
+using the class definition provided in the previous section. It also creates its own gym environment
+for interaction. During each episode, the \texttt{local\_network} starts by copying the weights from
+the \texttt{global\_network} and uses these parameters to collects experience tuples $(s, a, r,
+s')$. It then computes gradients at the end of the each episode by using this batch of experiences.
+The computed gradients are pushed to the \texttt{gradients\_queue} which can then be used for
+updating parameters of the \texttt{global\_network}. The parameters between multiple parallel
+processes are shared by using queues. Several steps are taken to ensure that the queues are not
+empty leading to deadlock situations. This includes pushing more data into the queue and taking
+appropriate steps if the queue is empty or full etc. It is also necessary to clear the memory after
+each thread to prevent running out of memory on the computer. This code uses Python's
+multiprocessing library to run the code on a multi-core CPU and does not require GPUs for execution.
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+import gymnasium as gym
+import numpy as np
+import multiprocessing
+import time
+import gc
+import queue
+from a2c import A2CAgent
+from collections import deque
+
+# Disable GPU for this script
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  
+
+import tensorflow as tf
+import tensorflow_probability as tfp
+
+# Worker function for each process
+def worker(worker_id, global_weights_queue, 
+           gradients_queue, save_request_queue, env_id, 
+           create_actor_func=None,
+           create_critic_func=None,
+           max_episodes=1500, max_score = 500, 
+           min_score = -500, max_steps = None):
+
+    # Set random seed for reproducibility in each process
+    tf.random.set_seed(worker_id + 1)
+    np.random.seed(worker_id + 1)
+
+    # create environment
+    env = gym.make(env_id)
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+
+    # Create local network and environment
+    if create_actor_func is not None:
+        actor = create_actor_func(obs_shape, action_size)
+    else:
+        actor = None
+
+    if create_critic_func is not None:
+        critic = create_critic_func(obs_shape)
+    else:
+        critic = None
+    local_network = A2CAgent(obs_shape, action_size,
+                             a_model=actor, c_model=critic)
+
+    # collect experience tuple and compute gradients
+    # for the local network
+    episode = 0
+    ep_scores = [] 
+    best_score = -np.inf
+    for episode in range(max_episodes):
+        weights_updated = False
+        for _ in range(3):  # Retry up to 3 times
+            try:
+                global_weights = global_weights_queue.get_nowait()
+                local_network.set_weights(*global_weights)
+                weights_updated = True
+                break # retrieval success
+            except queue.Empty:
+                time.sleep(0.1)  # Brief pause before retry
+        if not weights_updated: 
+            continue # Continue with current weights if queue is empty
+
+        state = env.reset()[0]
+        episode_reward = 0
+        done = False
+        step = 0
+        states = deque(maxlen=max_steps \
+               if max_steps is not None else 1000) 
+        actions = deque(maxlen=max_steps \
+               if max_steps is not None else 1000) 
+        rewards = deque(maxlen=max_steps \
+               if max_steps is not None else 1000)
+
+        # Collect trajectory
+        while not done: 
+            action = int(local_network.policy(state))
+            next_state, reward, done, truncated, _ = env.step(action)
+            done = done or truncated
+
+            states.append(state) # type: ignore
+            actions.append(action)
+            rewards.append(reward)
+
+            state = next_state
+            episode_reward += reward
+
+            step += 1
+
+            if max_score is not None and episode_reward >= max_score:
+                done = True
+            if min_score is not None and episode_reward <= min_score:
+                done = True
+            if max_steps is not None and step >= max_steps:
+                done = True
+
+        # end of episode
+        ep_scores.append(episode_reward)
+
+        # update the local network 
+        a_loss, c_loss, actor_grads, critic_grads = \
+               local_network.compute_gradients(
+            states, actions, rewards 
+        )
+
+        # Update global network
+        try:
+            gradients_queue.put_nowait((actor_grads, critic_grads))
+        except queue.Full: 
+            continue # queue full, skip updated
+
+
+        if episode_reward > best_score:
+            best_score = episode_reward
+
+        try:
+            save_request_queue.put_nowait(
+                  (worker_id, episode, episode_reward))
+        except queue.Full:  # skip save request
+            continue
+
+        # free memory  
+        tf.keras.backend.clear_session()  # Clear TensorFlow session
+        states.clear()
+        actions.clear()
+        rewards.clear()
+        gc.collect()  # Collect garbage to free memory
+    # end of for-loop
+    env.close()
+  \end{pygments}
+  \caption{Worker function that creates an agent to collect experiences from its own individual environment and
+    computes gradient. These gradients are then sent to the global network asynchronously for update}
+  \label{lst:a3c_worker}
+\end{listing}
+
+\subsubsection{Running multiple workers}
+
+The code for running multiple workers on parallel threads is provided in the listing
+\ref{lst:a3c_runw}. The function \texttt{run\_workers()} uses Python's multiprocessing
+module to achieve parallel execution of worker function. It creates a global \texttt{A2CAgent}
+referred to as \texttt{global\_networks} whose parameters are shared with the local network of each
+worker through the multiprocessing queue called \texttt{global\_weights\_queue}. The gradients
+computed by the local networks are received by the global network by using another multiprocessing
+queue called \texttt{gradients\_queue}. The gradients received are averaged and then applied to
+update the parameters of the \texttt{global\_network}. Adequate steps are taken to deal with
+situations when multi-processing queues are not empty or full. This prevents deadlock situation
+where the processes wait indefinitely to receive data from empty queues. 
+
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+def run_workers(env_name, max_num_workers=5, max_episodes=1500, 
+         wandb_log=True, max_score=500, min_score=-200,
+         max_steps=1000,
+         create_actor_func=None,
+         create_critic_func=None):
+    # Set random seed for reproducibility
+    tf.random.set_seed(42)
+    np.random.seed(42)
+
+    N_WORKERS = min(multiprocessing.cpu_count(), max_num_workers)
+    print('N_WORKERS:', N_WORKERS)
+
+
+    # Initialize environment to get state and action sizes
+    env = gym.make(env_name)
+
+    obs_shape = env.observation_space.shape
+    action_size = env.action_space.n
+    env_id = env.spec.id
+    env.close()
+
+    if create_actor_func is not None: 
+        a_model = create_actor_func(obs_shape, action_size)
+    else:
+        a_model = None
+    if create_critic_func is not None:
+        c_model = create_critic_func(obs_shape)
+    else:
+        c_model = None
+
+    # Initialize global network
+    global_network = A2CAgent(obs_shape, action_size,
+                              a_model=a_model, c_model=c_model)
+
+    # Create a queue to share weights between processes
+    manager = multiprocessing.Manager()
+    global_weights_queue = manager.Queue(maxsize=2*N_WORKERS)
+    gradients_queue = manager.Queue(maxsize=2*N_WORKERS)
+    save_request_queue = manager.Queue(maxsize=N_WORKERS)
+    save_lock = manager.Lock()
+
+    # initial weights for the global network
+    for _ in range(2*N_WORKERS):
+        # Initialize queue with the global network's weights
+        global_weights_queue.put(global_network.get_weights())
+
+
+    # Create and start worker processes
+    processes = []
+    for i in range(N_WORKERS):
+        p = multiprocessing.Process(
+            target=worker,
+            args=(i, global_weights_queue, gradients_queue, 
+                  save_request_queue, env_id, 
+                  create_actor_func, create_critic_func,  
+                  max_episodes,
+                  max_score, min_score, max_steps, wandb_log)
+        )
+        p.start()
+        processes.append(p)
+        print(f'Started worker {p.name}')
+
+    try:
+        last_refill_time = time.time()
+        best_reward = -np.inf
+        while(any(p.is_alive() for p in processes)):
+            gradients = []
+            for _ in range(N_WORKERS):
+                if not gradients_queue.empty():
+                    gradients.append(gradients_queue.get())
+
+            if gradients: # process gradients if available 
+                # Filter out None gradients
+                valid_gradients = [
+                    (actor_grads, critic_grads)
+                    for actor_grads, critic_grads in gradients
+                    if actor_grads is not None and critic_grads is not None
+                ]
+                # Only proceed if there are valid gradients
+                if valid_gradients:  
+                    actor_grads_avg = []
+                    critic_grads_avg = []
+                    for actor_grads, critic_grads in valid_gradients:
+                        if not actor_grads_avg:
+                            actor_grads_avg = [tf.convert_to_tensor(g)\
+                                    for g in actor_grads]
+                            critic_grads_avg = [tf.convert_to_tensor(g)\
+                                    for g in critic_grads]
+                        else:
+                            for i, g in enumerate(actor_grads):
+                                actor_grads_avg[i] = tf.add(
+                                    actor_grads_avg[i], tf.convert_to_tensor(g))
+                            for i, g in enumerate(critic_grads):
+                                critic_grads_avg[i] = tf.add(
+                                    critic_grads_avg[i], tf.convert_to_tensor(g))
+
+                    n = len(valid_gradients)
+                    actor_grads_avg = [tf.math.truediv(g, n) \
+                                       for g in actor_grads_avg]
+                    critic_grads_avg = [tf.math.truediv(g, n) \
+                                       for g in critic_grads_avg]
+
+                    global_network.apply_gradients(actor_grads_avg, 
+                                                critic_grads_avg)
+            
+                # Synchronize global weights with all workers
+                updated_weights = global_network.get_weights()
+                for _ in range(N_WORKERS):
+                    try:
+                        # Synchronize global weights with all workers
+                        global_weights_queue.put_nowait(updated_weights)
+                    except queue.Full: # skip synchronization
+                        while not global_weights_queue.empty():
+                            try: 
+                                global_weights_queue.get_nowait()
+                            except queue.Empty:
+                                break
+                        global_weights_queue.put_nowait(updated_weights)
+
+            # periodically refill the global weights queue
+            if time.time() - last_refill_time > 5:
+                try:
+                    global_weights_queue.put_nowait(
+                              global_network.get_weights())
+                    last_refill_time = time.time()
+                except queue.Full: # skip refill
+                    continue
+
+            # saving weights
+            while not save_request_queue.empty():
+                try:
+                    worker_id, episode, episode_reward = \
+                              save_request_queue.get_nowait()
+                    print(f"Worker: {worker_id},\ 
+                           episode: {episode},  \
+                           reward: {episode_reward:.2f}")
+                    if episode_reward > best_reward:
+                        best_reward = episode_reward
+                        with save_lock:
+                            try:
+                                global_network.save_weights(
+                                    actor_wt_file='a3c_actor.weights.h5',
+                                    critic_wt_file='a3c_critic.weights.h5',
+                                )
+                                print(f"Best Score: {best_reward}. \
+                                                Saved weights!")
+                            except Exception as e:
+                                print(f"Error saving weights: {e}")
+                except queue.Empty:
+                    break
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        print("Shutting down workers...")
+        #Wait for all processes to complete
+        for p in processes:
+            p.join()
+            print(f'Worker {p.name} has finished.')
+  \end{pygments}
+  \caption{Python Function to run multiple workers in parallel. The gradients are collected from
+  each worker and used for updating the parameters of the global network asynchronously.}
+  \label{lst:a3c_runw}
+\end{listing}
+
+\subsubsection{Updating \texttt{A2CAgent} to work with multiple workers}
+
+The \texttt{A2CAgent} class declaration provided in Listing \ref{lst:a2c_agent} is updated to
+include some additional methods to facilitate working with multiple workers.  This is provided in
+Listing \ref{lst:a3c_grad_comp}.  This primarily includes separating the gradient computation from
+the parameter update steps. The method \texttt{compute\_gradients()} is used by the
+\texttt{local\_network} agent of each worker to compute gradients. The method
+\texttt{apply\_gradients()} is used by the \texttt{global\_network} to update its parameters. The
+methods \texttt{get\_weights()} and \texttt{set\_weights()} allow copying of parameters between the
+global network and the local networks.  Gradient clipping is applied to ensure that the gradients do
+not grow out of bounds leading to \texttt{NaN} values.
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+class A2CAgent:
+    def compute_gradients(self, states, actions, rewards):
+        states, actions, discnt_rewards = \
+            self.compute_discounted_rewards(states, actions, rewards)
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            values = self.critic(states)
+            td_error = tf.math.subtract(discnt_rewards, values)
+            actor_loss = self.compute_actor_loss(states,\ 
+                                       actions, td_error)
+            critic_loss = tf.reduce_mean(tf.square(td_error))
+
+        # compute gradients 
+        actor_grads = tape1.gradient(actor_loss, 
+                     self.actor.model.trainable_variables)
+        critic_grads = tape2.gradient(critic_loss, 
+                     self.critic.model.trainable_variables)
+
+        # clip gradients 
+        actor_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \
+                  if grad is not None else None for grad in actor_grads ]
+        critic_grads = [tf.clip_by_norm(grad, self.grad_clip_norm) \
+                  if grad is not None else None for grad in critic_grads]  
+
+        # Check for NaN gradients
+        actor_has_nan = any(tf.reduce_any(tf.math.is_nan(grad)) \
+                        for grad in actor_grads if grad is not None)
+        critic_has_nan = any(tf.reduce_any(tf.math.is_nan(grad)) \
+                        for grad in critic_grads if grad is not None)
+
+
+        if actor_has_nan or critic_has_nan:
+            print(f"NaN gradients detected! "
+                  f"Actor NaN: {actor_has_nan}, \
+                           Critic NaN: {critic_has_nan}, "
+            # Skip sending gradients to avoid corrupting global network
+            return None, None, None, None
+
+        return actor_loss.numpy(), critic_loss.numpy(), \
+               actor_grads, critic_grads
+    
+    def apply_gradients(self, actor_grads, critic_grads):
+        self.actor.optimizer.apply_gradients(
+            zip(actor_grads, self.actor.model.trainable_variables))
+        self.critic.optimizer.apply_gradients(
+            zip(critic_grads, self.critic.model.trainable_variables))
+
+    def get_weights(self):
+        return self.actor.model.get_weights(), \
+                     self.critic.model.get_weights()
+
+    def set_weights(self, actor_weights, critic_weights):
+        self.actor.model.set_weights(actor_weights)
+        self.critic.model.set_weights(critic_weights)
+  \end{pygments}
+  \caption{Additional methods needed to use \texttt{A2CAgent} with multiple workers. Specifically,
+  the gradient computation is separated from the updating parameters stage.}  
+    \label{lst:a3c_grad_comp}
+\end{listing}
+
+
+\subsection{Solving \texttt{LunarLander-v3} using A3C model}
+The code provided in Listing \ref{lst:a3c_llv3} shows the main code that calls the function
+\texttt{run\_workers()} function to train a global \texttt{A2CAgent} by running multiple workers in
+parallel. The training performance of the resulting A3C agent is shown in Figure
+\ref{fig:a3c_llv3}. It shows how the average of last 100 episodes (\texttt{average100score}) evolves
+with increasing training episodes. It can be easily seen that A3C clearly outperforms A2C algorithm
+by achieving higher average episodic score over time. This figure also shows two versions A3C
+implementation. \texttt{A3C\_v1} uses discounted return to compute TD error while \texttt{A3C\_v2}
+uses the standard Bellman equation to compute TD error from the current $s$ and next states $s'$
+information. 
+
+\begin{listing}
+  \begin{pygments}[frame=single, indent=L]{python}
+from a3c import run_workers
+import multiprocessing
+import tensorflow as tf
+
+# create actor & Critic models
+def create_actor_model(obs_shape, n_actions):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    a = tf.keras.layers.Dense(n_actions, activation='softmax')(x)
+    model = tf.keras.models.Model(s_input, a, name='actor_network')
+    model.summary()
+    return model
+
+def create_critic_model(obs_shape):
+    s_input = tf.keras.layers.Input(shape=obs_shape)
+    x = tf.keras.layers.Dense(128, activation='relu')(s_input)
+    x = tf.keras.layers.Dense(128, activation='relu')(x)
+    v = tf.keras.layers.Dense(1, activation=None)(x)
+    model = tf.keras.models.Model(s_input, v, name='critic_network')
+    model.summary()
+    return model
+
+if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
+    run_workers(
+        env_name='LunarLander-v3',
+        max_num_workers=20,
+        max_episodes=1500,
+        max_score=500,
+        min_score=-200,
+        max_steps=1000,
+        create_actor_func=create_actor_model,
+        create_critic_func=create_critic_model,
+    )
+
+  \end{pygments}
+  \begin{framed}
+    \begin{scriptsize}
+      \begin{verbatim}
+Worker: 11, episode: 7, reward: -106.48
+Worker: 16, episode: 9, reward: -139.72
+Worker: 2, episode: 7, reward: -203.49
+Worker: 15, episode: 9, reward: -148.49
+Worker: 10, episode: 9, reward: 26.72
+Best Score: 26.721404883008873. Saved weights!
+Worker: 1, episode: 9, reward: -164.57
+Worker: 7, episode: 10, reward: -129.38
+Worker: 19, episode: 11, reward: -96.75
+Worker: 14, episode: 9, reward: -113.13
+Worker: 13, episode: 10, reward: -213.46
+Worker: 9, episode: 8, reward: -200.68
+.. .
+.. .
+Worker: 15, episode: 439, reward: 132.81
+Worker: 5, episode: 436, reward: 165.65
+Worker: 16, episode: 443, reward: 87.35
+Worker: 4, episode: 435, reward: 133.58
+.. .
+.. .
+orker: 18, episode: 567, reward: 128.30
+Worker: 10, episode: 577, reward: 150.79
+Worker: 17, episode: 581, reward: 170.52
+Worker: 7, episode: 592, reward: 181.43
+Worker: 11, episode: 601, reward: 135.22
+Worker: 2, episode: 593, reward: 184.58
+
+      \end{verbatim}
+    \end{scriptsize}
+  \end{framed}
+  \caption{Main python code for training A3C agent on \texttt{LunarLander-v3} problem environment}
+  \label{lst:a3c_llv3}
+\end{listing}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tabular}{cc}
+  \includegraphics[scale=0.08]{./figures/chap07/lunarlander_v3_a3c.png} & 
+  \includegraphics[scale=0.08]{./figures/chap07/lunarlander_v3_a3c_best.png} \\
+  {\scriptsize (a) Average of last 100 episodes} & {\scriptsize (b) Best Episodic Score}
+\end{tabular}
+  \caption{Training performance of A3C algorithm for \texttt{LunarLander-v3} environment}
+  \label{fig:a3c_llv3}
+\end{figure}
+
+\section{Summary}
+This chapter explores actor-critic methods, a cornerstone of reinforcement learning that integrates
+policy-based and value-based approaches. It begins with the foundational actor-critic framework,
+where the actor learns a policy to select actions and the critic evaluates them by estimating state
+values, balancing exploration and exploitation. The naive actor-critic approach is introduced,
+highlighting its simplicity but also its limitations, such as high variance in policy updates due to
+unscaled rewards. The chapter then delves into advanced variants: A2C (Advantage Actor-Critic) and
+A3C (Asynchronous Advantage Actor-Critic). A2C improves stability by using the advantage function to
+guide policy updates and synchronizes experience collection across multiple environments for
+consistent gradient updates. In contrast, A3C leverages asynchronous parallel workers to update a
+shared network, enhancing training speed but introducing potential instability from stale gradients.
+Through mathematical formulations and practical comparisons, the chapter illustrates how these
+methods address variance and efficiency challenges, making them suitable for complex tasks like game
+playing and robotics.

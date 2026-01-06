@@ -1,0 +1,135 @@
+\begin{thebibliography}{10}
+
+\bibitem{sutton2018reinforcement}
+Richard~S Sutton and Andrew~G Barto.
+\newblock {\em Reinforcement learning: An introduction}.
+\newblock MIT press, 2018.
+
+\bibitem{norris1998markov}
+James~R Norris.
+\newblock {\em Markov chains}.
+\newblock Number~2. Cambridge university press, 1998.
+
+\bibitem{skinner1971operant}
+Burrhus~F Skinner.
+\newblock Operant conditioning.
+\newblock {\em The encyclopedia of education}, 7:29--33, 1971.
+
+\bibitem{haney2020applied}
+Brian~Seamus Haney.
+\newblock Applied artificial intelligence in modern warfare and national
+  security policy.
+\newblock {\em Hastings Sci. \& Tech. LJ}, 11:61, 2020.
+
+\bibitem{arulkumaran2017brief}
+Kai Arulkumaran, Marc~Peter Deisenroth, Miles Brundage, and Anil~Anthony
+  Bharath.
+\newblock A brief survey of deep reinforcement learning.
+\newblock {\em arXiv preprint arXiv:1708.05866}, 2017.
+
+\bibitem{li2017deep}
+Yuxi Li.
+\newblock Deep reinforcement learning: An overview.
+\newblock {\em arXiv preprint arXiv:1701.07274}, 2017.
+
+\bibitem{franccois2018introduction}
+Vincent Fran{\c{c}}ois-Lavet, Peter Henderson, Riashat Islam, Marc~G Bellemare,
+  Joelle Pineau, et~al.
+\newblock An introduction to deep reinforcement learning.
+\newblock {\em Foundations and Trends{\textregistered} in Machine Learning},
+  11(3-4):219--354, 2018.
+
+\bibitem{silver2017mastering}
+David Silver, Julian Schrittwieser, Karen Simonyan, Ioannis Antonoglou, Aja
+  Huang, Arthur Guez, Thomas Hubert, Lucas Baker, Matthew Lai, Adrian Bolton,
+  et~al.
+\newblock Mastering the game of go without human knowledge.
+\newblock {\em nature}, 550(7676):354--359, 2017.
+
+\bibitem{bellman1966dynamic}
+Richard Bellman.
+\newblock Dynamic programming.
+\newblock {\em Science}, 153(3731):34--37, 1966.
+
+\bibitem{gym}
+{Farama Foundation}.
+\newblock Gymnasium.
+\newblock \url{https://gymnasium.farama.org/}.
+
+\bibitem{sutton1988learning}
+Richard~S Sutton.
+\newblock Learning to predict by the methods of temporal differences.
+\newblock {\em Machine learning}, 3:9--44, 1988.
+
+\bibitem{van2016deep}
+Hado Van~Hasselt, Arthur Guez, and David Silver.
+\newblock Deep reinforcement learning with double q-learning.
+\newblock In {\em Proceedings of the AAAI conference on artificial
+  intelligence}, volume~30, 2016.
+
+\bibitem{lillicrap2015continuous}
+Timothy~P Lillicrap, Jonathan~J Hunt, Alexander Pritzel, Nicolas Heess, Tom
+  Erez, Yuval Tassa, David Silver, and Daan Wierstra.
+\newblock Continuous control with deep reinforcement learning.
+\newblock {\em arXiv preprint arXiv:1509.02971}, 2015.
+
+\bibitem{polyak1992acceleration}
+Boris~T Polyak and Anatoli~B Juditsky.
+\newblock Acceleration of stochastic approximation by averaging.
+\newblock {\em SIAM journal on control and optimization}, 30(4):838--855, 1992.
+
+\bibitem{maller2009ornstein}
+Ross~A Maller, Gernot M{\"u}ller, and Alex Szimayer.
+\newblock Ornstein--uhlenbeck processes and extensions.
+\newblock {\em Handbook of financial time series}, pages 421--437, 2009.
+
+\bibitem{schulman2015trust}
+John Schulman.
+\newblock Trust region policy optimization.
+\newblock {\em arXiv preprint arXiv:1502.05477}, 2015.
+
+\bibitem{kakade2002approximately}
+Sham Kakade and John Langford.
+\newblock Approximately optimal approximate reinforcement learning.
+\newblock In {\em Proceedings of the Nineteenth International Conference on
+  Machine Learning}, pages 267--274, 2002.
+
+\bibitem{schulman2017proximal}
+John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov.
+\newblock Proximal policy optimization algorithms.
+\newblock {\em arXiv preprint arXiv:1707.06347}, 2017.
+
+\bibitem{schulman2015high}
+John Schulman, Philipp Moritz, Sergey Levine, Michael Jordan, and Pieter
+  Abbeel.
+\newblock High-dimensional continuous control using generalized advantage
+  estimation.
+\newblock {\em arXiv preprint arXiv:1506.02438}, 2015.
+
+\bibitem{sewak2019actor}
+Mohit Sewak.
+\newblock Actor-critic models and the a3c: The asynchronous advantage
+  actor-critic model.
+\newblock In {\em Deep reinforcement learning: frontiers of artificial
+  intelligence}, pages 141--152. Springer, 2019.
+
+\bibitem{haarnoja2018soft}
+Tuomas Haarnoja, Aurick Zhou, Kristian Hartikainen, George Tucker, Sehoon Ha,
+  Jie Tan, Vikash Kumar, Henry Zhu, Abhishek Gupta, Pieter Abbeel, et~al.
+\newblock Soft actor-critic algorithms and applications.
+\newblock {\em arXiv preprint arXiv:1812.05905}, 2018.
+
+\bibitem{plappert2018multi}
+Matthias Plappert, Marcin Andrychowicz, Alex Ray, Bob McGrew, Bowen Baker,
+  Glenn Powell, Jonas Schneider, Josh Tobin, Maciek Chociej, Peter Welinder,
+  et~al.
+\newblock Multi-goal reinforcement learning: Challenging robotics environments
+  and request for research.
+\newblock {\em arXiv preprint arXiv:1802.09464}, 2018.
+
+\bibitem{fetchreachgym}
+{Gymnasium-Robotics}.
+\newblock Fetch reach gym environment.
+\newblock \url{https://robotics.farama.org/envs/fetch/reach/}.
+
+\end{thebibliography}

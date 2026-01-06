@@ -1,0 +1,21 @@
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {algorithm}{\numberline {3.1}{\ignorespaces First-Visit Monte Carlo Algorithm (\emph {for state-action values})}}{43}{}%
+\contentsline {algorithm}{\numberline {3.2}{\ignorespaces First-Visit Constant-$\alpha $ GLIE MC Control Algorithm}}{49}{}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {algorithm}{\numberline {5.1}{\ignorespaces DQN Algorithm}}{69}{}%
+\contentsline {algorithm}{\numberline {5.2}{\ignorespaces Double DQN (DDQN) Algorithm}}{70}{}%
+\addvspace {10\p@ }
+\contentsline {algorithm}{\numberline {6.1}{\ignorespaces DDPG Algorithm}}{113}{}%
+\contentsline {algorithm}{\numberline {6.2}{\ignorespaces \small \add@extra@listi {sml}PPO-Clip Algorithm}}{128}{}%
+\contentsline {algorithm}{\numberline {6.3}{\ignorespaces \small \add@extra@listi {sml}PPO with Adaptive KL Penalty}}{129}{}%
+\addvspace {10\p@ }
+\contentsline {algorithm}{\numberline {7.1}{\ignorespaces Actor-Critic Algorithm}}{147}{}%
+\contentsline {algorithm}{\numberline {7.2}{\ignorespaces Advantage Actor-Critic (A2C) Algorithm}}{155}{}%
+\addvspace {10\p@ }
+\contentsline {algorithm}{\numberline {8.1}{\ignorespaces Soft Actor-Critic (SAC)}}{179}{}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
