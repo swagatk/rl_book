@@ -111,5 +111,3 @@
 * Images:
     - `./chap08/images/`: contains performance plots
 
-## PDF Book
-    * Now the source code for the latex book is available under `latex` folder.
