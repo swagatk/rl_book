@@ -18,13 +18,19 @@ def clickMouse():
     main()
 
 def main():
+    click_interval_sec = 10.0
+    next_click_time = time.time() + click_interval_sec
+
     try:
         while True:
             moveMouse()
-            time.sleep(1.0)
-            if time.time() % 10 < 10:
+            now = time.time()
+
+            if now >= next_click_time:
                 clickMouse()
-            time.sleep(0.01)
+                next_click_time = now + click_interval_sec
+
+            time.sleep(1.0)
     except KeyboardInterrupt:
         print("Script terminated by user")
         exit(-1)

@@ -46,14 +46,14 @@ class RSSM(tf.keras.Model):
 
 def build_encoder(obs_shape, hidden_nodes=256):
     return tf.keras.Sequential([
-        layers.InputLayer(input_shape=obs_shape),
+        layers.InputLayer(shape=obs_shape),
         layers.Dense(hidden_nodes, activation='elu'),
         layers.Dense(hidden_nodes, activation='elu'),
     ])
 
 def build_decoder(obs_shape, h_size, z_size, hidden_nodes=256):
     return tf.keras.Sequential([
-        layers.InputLayer(input_shape=(h_size + z_size,)),
+        layers.InputLayer(shape=(h_size + z_size,)),
         layers.Dense(hidden_nodes, activation='elu'),
         layers.Dense(hidden_nodes, activation='elu'),
         layers.Dense(obs_shape[0])
@@ -61,7 +61,7 @@ def build_decoder(obs_shape, h_size, z_size, hidden_nodes=256):
 
 def build_reward_model(h_size, z_size, hidden_nodes):
     return tf.keras.Sequential([
-        layers.InputLayer(input_shape=(h_size + z_size,)),
+        layers.InputLayer(shape=(h_size + z_size,)),
         layers.Dense(hidden_nodes, activation='elu'),
         layers.Dense(1)
     ])
@@ -91,16 +91,24 @@ class Critic(tf.keras.Model):
         return self.net(latent)
 
 class DreamerV1:
-    def __init__(self, obs_shape, action_dim,
-                 h_size=256,
-                 z_size=32,
-                 batch_size=24,
-                 seq_len=50,
-                 horizon=15,
+    def __init__(self, obs_shape, action_dim, 
+                 h_size=256, 
+                 z_size=32, 
+                 batch_size=24, 
+                 seq_len=50, 
+                 horizon=15, 
                  kl_scale=0.1,
                  hidden_nodes=256,
                  lr_model=3e-4,
                  lr_agent=1e-4,
+                 gamma=0.99,
+                 lambda_=0.95,
+                 actor_noise_init=0.3,
+                 actor_noise_min=0.05,
+                 actor_noise_decay=50000,
+                 target_critic_tau=0.01,
+                 model_grad_clip=100.0,
+                 agent_grad_clip=100.0,
                  bufferlen=100000):
         self.obs_shape = obs_shape
         self.action_dim = action_dim
@@ -110,37 +118,80 @@ class DreamerV1:
         self.reward_model = build_reward_model(h_size, z_size, hidden_nodes)
         self.actor = Actor(action_dim, hidden_nodes)
         self.critic = Critic(hidden_nodes)
+        self.critic_target = Critic(hidden_nodes)
         self.model_opt = tf.keras.optimizers.Adam(lr_model)
         self.agent_opt = tf.keras.optimizers.Adam(lr_agent)
         self.buffer = collections.deque(maxlen=bufferlen)
-        self.HORIZON = horizon
-        self.SEQ_LEN = seq_len
+        self.HORIZON = horizon 
+        self.SEQ_LEN = seq_len 
         self.BATCH_SIZE = batch_size
-        self.H_SIZE = h_size
+        self.H_SIZE = h_size 
         self.Z_SIZE = z_size
-        self.KL_SCALE = kl_scale
+        self.KL_SCALE = kl_scale  
+        self.GAMMA = gamma
+        self.LAMBDA = lambda_
+        self.ACTOR_NOISE_INIT = actor_noise_init
+        self.ACTOR_NOISE_MIN = actor_noise_min
+        self.ACTOR_NOISE_DECAY = float(actor_noise_decay)
+        self.TARGET_CRITIC_TAU = target_critic_tau
+        self.MODEL_GRAD_CLIP = model_grad_clip
+        self.AGENT_GRAD_CLIP = agent_grad_clip
+        self.train_step = 0
+
+        # Build target critic with a dummy call and sync weights with the online critic.
+        dummy_latent = tf.zeros([1, self.H_SIZE + self.Z_SIZE], dtype=tf.float32)
+        _ = self.critic(dummy_latent)
+        _ = self.critic_target(dummy_latent)
+        self.critic_target.set_weights(self.critic.get_weights())
 
 
-    def select_action(self, obs, state, training=True):
+    def select_action(self, obs, state, prev_action=None, training=True):
         obs = tf.convert_to_tensor(obs[None], dtype=tf.float32)
         embed = self.encoder(obs)
-        action_placeholder = tf.zeros([1, self.action_dim])
-        state, _ = self.rssm.observe(embed, action_placeholder, state)
+        if prev_action is None:
+            prev_action = tf.zeros([1, self.action_dim], dtype=tf.float32)
+        else:
+            prev_action = tf.convert_to_tensor(prev_action[None], dtype=tf.float32)
+        state, _ = self.rssm.observe(embed, prev_action, state)
         h, z = state
         latent = tf.concat([h, z], axis=-1)
         action = self.actor(latent)
         if training:
-            action += tf.random.normal(tf.shape(action)) * 0.1
+            frac = np.exp(-float(self.train_step) / self.ACTOR_NOISE_DECAY)
+            noise_std = self.ACTOR_NOISE_MIN + (self.ACTOR_NOISE_INIT - self.ACTOR_NOISE_MIN) * frac
+            action += tf.random.normal(tf.shape(action)) * noise_std
+            self.train_step += 1
         return tf.clip_by_value(action[0], -1.0, 1.0), state
 
     def train(self):
         if len(self.buffer) < self.BATCH_SIZE * self.SEQ_LEN:
-            return
+            return None, None
 
-        indices = np.random.randint(0, len(self.buffer) - self.SEQ_LEN, self.BATCH_SIZE)
+        max_start = len(self.buffer) - self.SEQ_LEN
+        if max_start <= 0:
+            return None, None
+
+        # Convert once for contiguous slicing; avoid scanning the whole replay every train call.
+        replay = list(self.buffer)
+        indices = []
+        attempts = 0
+        max_attempts = self.BATCH_SIZE * 40
+        while len(indices) < self.BATCH_SIZE and attempts < max_attempts:
+            idx = np.random.randint(0, max_start)
+            seq = replay[idx:idx + self.SEQ_LEN]
+            dones = [s[3] if len(s) > 3 else False for s in seq]
+            if any(dones[:-1]):
+                attempts += 1
+                continue
+            indices.append(idx)
+            attempts += 1
+
+        if len(indices) < self.BATCH_SIZE:
+            return None, None
+
         obs_seq, act_seq, rew_seq = [], [], []
         for idx in indices:
-            seq = list(self.buffer)[idx:idx+self.SEQ_LEN]
+            seq = replay[idx:idx+self.SEQ_LEN]
             obs_seq.append([s[0] for s in seq])
             act_seq.append([s[1] for s in seq])
             rew_seq.append([s[2] for s in seq])
@@ -171,6 +222,8 @@ class DreamerV1:
                 kl = tf.reduce_mean(tf.math.log(p_s/po_s) + (tf.square(po_s)+tf.square(po_m-p_m))/(2.0*tf.square(p_s)) - 0.5)
                 kl_loss += tf.maximum(kl, 1.0)
 
+            kl_loss = kl_loss / float(self.SEQ_LEN)
+
             latent_seq = tf.concat([tf.stack(h_seq, 1), tf.stack(z_seq, 1)], -1)
             rec_obs = self.decoder(tf.reshape(latent_seq, [-1, self.H_SIZE+self.Z_SIZE]))
             rec_loss = tf.reduce_mean(tf.square(rec_obs - tf.reshape(obs_seq, [-1, *self.obs_shape])))
@@ -184,23 +237,48 @@ class DreamerV1:
             h_flat = tf.reshape(h_stack, [-1, self.H_SIZE])
             z_flat = tf.reshape(z_stack, [-1, self.Z_SIZE])
             state = (tf.stop_gradient(h_flat), tf.stop_gradient(z_flat))
-            imag_rewards, imag_values = [], []
+            imag_rewards, imag_values, target_values = [], [], []
             for _ in range(self.HORIZON):
-                action = self.actor(tf.concat(state, -1))
+                latent = tf.concat(state, -1)
+                action = self.actor(latent)
                 state, _ = self.rssm.imagine(action, state)
-                imag_rewards.append(self.reward_model(tf.concat(state, -1)))
-                imag_values.append(self.critic(tf.concat(state, -1)))
+                next_latent = tf.concat(state, -1)
+                imag_rewards.append(self.reward_model(next_latent))
+                imag_values.append(self.critic(next_latent))
+                target_values.append(self.critic_target(next_latent))
 
-            returns = tf.reshape(tf.stack(imag_rewards), [self.HORIZON, -1])
+            imag_rewards = tf.reshape(tf.stack(imag_rewards), [self.HORIZON, -1])
+            imag_values = tf.reshape(tf.stack(imag_values), [self.HORIZON, -1])
+            target_values = tf.reshape(tf.stack(target_values), [self.HORIZON, -1])
+
+            # Lambda-return target with a slowly-updated target critic for stability.
+            targets = []
+            ret = imag_rewards[-1] + self.GAMMA * target_values[-1]
+            targets.append(ret)
+            for t in reversed(range(self.HORIZON - 1)):
+                ret = imag_rewards[t] + self.GAMMA * ((1.0 - self.LAMBDA) * target_values[t + 1] + self.LAMBDA * ret)
+                targets.append(ret)
+            returns = tf.stack(list(reversed(targets)), axis=0)
+
+            # Actor optimizes the online value estimate on imagined states.
             actor_loss = -tf.reduce_mean(returns)
-            critic_loss = tf.reduce_mean(tf.square(tf.reshape(tf.stack(imag_values), [self.HORIZON, -1]) - tf.stop_gradient(returns)))
+            critic_loss = tf.reduce_mean(tf.square(imag_values - tf.stop_gradient(returns)))
             agent_loss = actor_loss + critic_loss
 
-        self.model_opt.apply_gradients(zip(model_tape.gradient(model_loss, self.model_opt_vars), self.model_opt_vars))
-        self.agent_opt.apply_gradients(zip(agent_tape.gradient(agent_loss, self.agent_opt_vars), self.agent_opt_vars))
+        model_grads = model_tape.gradient(model_loss, self.model_opt_vars)
+        model_grads, _ = tf.clip_by_global_norm(model_grads, self.MODEL_GRAD_CLIP)
+        self.model_opt.apply_gradients(zip(model_grads, self.model_opt_vars))
+
+        agent_grads = agent_tape.gradient(agent_loss, self.agent_opt_vars)
+        agent_grads, _ = tf.clip_by_global_norm(agent_grads, self.AGENT_GRAD_CLIP)
+        self.agent_opt.apply_gradients(zip(agent_grads, self.agent_opt_vars))
+
+        # Soft-update target critic.
+        tau = self.TARGET_CRITIC_TAU
+        for target_var, source_var in zip(self.critic_target.trainable_variables, self.critic.trainable_variables):
+            target_var.assign((1.0 - tau) * target_var + tau * source_var)
         del agent_tape
-        del model_tape
-        return model_loss, agent_loss
+        return model_loss.numpy(), agent_loss.numpy()
 
     @property
     def model_opt_vars(self):
