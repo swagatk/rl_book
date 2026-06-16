@@ -28,3 +28,5 @@ wandb/
 *.zip
 *.csv
 **/.txt
+.vscode/
+.venv/
