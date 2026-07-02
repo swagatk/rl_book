@@ -1,5 +1,4 @@
 import pyautogui
-import threading
 import time
 import random
 
@@ -15,7 +14,6 @@ def moveMouse():
 
 def clickMouse():
     pyautogui.click()
-    main()
 
 def main():
     click_interval_sec = 10.0
@@ -23,14 +21,18 @@ def main():
 
     try:
         while True:
-            moveMouse()
-            now = time.time()
+            try:
+                moveMouse()
+                now = time.time()
 
-            if now >= next_click_time:
-                clickMouse()
-                next_click_time = now + click_interval_sec
+                if now >= next_click_time:
+                    clickMouse()
+                    next_click_time = now + click_interval_sec
 
-            time.sleep(1.0)
+                time.sleep(1.0)
+            except pyautogui.FailSafeException:
+                print("PyAutoGUI fail-safe triggered (mouse in a screen corner). Move it away to resume.")
+                time.sleep(1.0)
     except KeyboardInterrupt:
         print("Script terminated by user")
         exit(-1)
