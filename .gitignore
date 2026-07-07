@@ -30,3 +30,4 @@ wandb/
 **/.txt
 .vscode/
 .venv/
+*.h5

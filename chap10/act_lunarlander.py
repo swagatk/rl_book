@@ -287,6 +287,53 @@ def evaluate_model(env, model, chunk_size, action_dim, num_episodes=1):
         eval_rewards.append(total_reward)
     return eval_rewards
 
+
+def evaluate_model_and_save_gif(env, model, chunk_size, action_dim, num_episodes, gif_path, fps=30):
+    """Evaluates the model, records all frames across episodes, and saves a single GIF."""
+    try:
+        import imageio.v2 as imageio
+    except ImportError:
+        print("imageio is not installed; skipping final evaluation GIF export.")
+        return evaluate_model(env, model, chunk_size, action_dim, num_episodes), False
+
+    eval_rewards = []
+    frames = []
+
+    for _ in range(num_episodes):
+        obs, _ = env.reset()
+        ensembler = TemporalEnsembler(chunk_size=chunk_size, action_dim=action_dim, exponential_weight=0.01)
+        total_reward = 0.0
+        done = False
+
+        frame = env.render()
+        if frame is not None:
+            frames.append(frame)
+
+        while not done:
+            state_in = tf.convert_to_tensor(obs[None, :], dtype=tf.float32)
+            predicted_chunk = model(state_in, training=False)
+            predicted_chunk_np = predicted_chunk[0].numpy()
+            smoothed_action = ensembler.update_and_get_action(predicted_chunk_np)
+            obs, reward, terminated, truncated, _ = env.step(smoothed_action)
+            done = terminated or truncated
+            total_reward += reward
+
+            frame = env.render()
+            if frame is not None:
+                frames.append(frame)
+
+        eval_rewards.append(total_reward)
+
+    if frames:
+        gif_dir = os.path.dirname(gif_path)
+        if gif_dir:
+            os.makedirs(gif_dir, exist_ok=True)
+        imageio.mimsave(gif_path, frames, fps=fps)
+        return eval_rewards, True
+
+    print("No frames were captured during final evaluation; skipping GIF export.")
+    return eval_rewards, False
+
 def main():
     # Limit GPU memory to 6 GB
     #limit_gpu_memory(6144)
@@ -311,7 +358,7 @@ def main():
     optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
 
     # 4. Train using standard TF Custom Training Loop (combining Reconstruction & KL penalties)
-    epochs = 100
+    epochs = 200
     batch_size = 64
     beta = 0.001 # KL Divergence scale factor
 
@@ -385,12 +432,27 @@ def main():
     # 5. Live Online Evaluation using Temporal Ensembling
     print("\n--- Evaluating Trained ACT Model with Temporal Ensembling ---")
     eval_episodes = 5
-    final_eval_rewards = evaluate_model(env, model, chunk_size, action_dim, num_episodes=eval_episodes)
+    final_eval_env = gym.make(env_name, render_mode="rgb_array")
+    final_gif_path = os.path.join(os.path.dirname(__file__), "act_lunarlander_final_eval.gif")
+    final_eval_rewards, gif_saved = evaluate_model_and_save_gif(
+        final_eval_env,
+        model,
+        chunk_size,
+        action_dim,
+        num_episodes=eval_episodes,
+        gif_path=final_gif_path,
+        fps=30,
+    )
+    final_eval_env.close()
     
     for ep, total_reward in enumerate(final_eval_rewards):
         print(f"Evaluation Episode {ep+1}: Total Reward = {total_reward:.2f}")
 
     print(f"\nEvaluation Complete! Average Reward over {eval_episodes} episodes: {np.mean(final_eval_rewards):.2f}")
+    if gif_saved:
+        print(f"Saved final evaluation GIF to: {final_gif_path}")
+    else:
+        print("Final evaluation GIF was not saved.")
     env.close()
     wandb.finish()
 
