@@ -1,6 +1,7 @@
 import os
 import random
 from dataclasses import dataclass
+from typing import Any, cast
 
 import gymnasium as gym
 import numpy as np
@@ -30,19 +31,26 @@ class Config:
 	hidden_dim: int = 256
 	time_embed_dim: int = 64
 	learning_rate: float = 1e-4
-	epochs: int = 200
+	epochs: int = 100
 	batch_size: int = 256
 
 	# Evaluation settings
 	eval_every: int = 5
 	eval_episodes: int = 3
 	final_eval_episodes: int = 5
+	final_gif_frame_skip: int = 1
+	final_gif_max_frames_per_episode: int = 120
+	wandb_preview_episodes: int = 1
+	wandb_preview_frame_skip: int = 12
+	wandb_preview_max_frames_per_episode: int = 60
 	final_gif_name: str = "diffusion_lunarlander_final.gif"
+	wandb_preview_name: str = "diffusion_lunarlander_preview.mp4"
 	final_gif_fps: int = 30
 
 	# W&B
 	wandb_project: str = "diffusion-lunarlander"
 	wandb_run_name: str = "diffusion-policy-run"
+	wandb_log_final_preview: bool = True
 
 
 def set_seed(seed: int) -> None:
@@ -313,6 +321,101 @@ def evaluate_policy(
 	return float(np.mean(rewards)), rewards
 
 
+def _evaluate_policy_and_save_video(
+	env: gym.Env,
+	model: tf.keras.Model,
+	schedule: DiffusionSchedule,
+	action_dim: int,
+	num_episodes: int,
+	video_path: str,
+	fps: int = 30,
+	frame_skip: int = 4,
+	max_frames_per_episode: int = 120,
+) -> tuple[float, list[float], bool]:
+	"""
+	Evaluates the policy and streams a subsampled rollout into a single video file.
+	Requires env to support rgb-array rendering.
+	"""
+	try:
+		import imageio.v2 as imageio
+	except ImportError:
+		print("imageio is not installed; skipping video export.")
+		avg_reward, rewards = evaluate_policy(env, model, schedule, action_dim, num_episodes)
+		return avg_reward, rewards, False
+
+	video_dir = os.path.dirname(video_path)
+	if video_dir:
+		os.makedirs(video_dir, exist_ok=True)
+
+	frame_skip = max(1, int(frame_skip))
+	max_frames_per_episode = max(1, int(max_frames_per_episode))
+	rewards = []
+	video_saved = False
+
+	try:
+		kwargs: dict[str, Any] = {"mode": "I", "fps": fps}
+		if video_path.lower().endswith(".mp4"):
+			kwargs.update({"codec": "libx264", "quality": 6, "macro_block_size": None})
+		elif video_path.lower().endswith(".gif"):
+			kwargs.update({"loop": 0})
+			
+		writer = cast(
+			Any,
+			imageio.get_writer(
+				video_path,
+				**kwargs,
+			),
+		)
+		with writer:
+			for ep in range(num_episodes):
+				state, _ = env.reset()
+				done = False
+				total_reward = 0.0
+				step_index = 0
+				frames_written = 0
+
+				frame = env.render()
+				if frame is not None:
+					writer.append_data(np.asarray(frame))
+					frames_written += 1
+
+				while not done:
+					action = sample_action(model, schedule, state, action_dim)
+					state, reward, terminated, truncated, _ = env.step(action)
+					done = terminated or truncated
+					total_reward += float(reward)
+					step_index += 1
+
+					if (
+						frames_written < max_frames_per_episode
+						and step_index % frame_skip == 0
+					):
+						frame = env.render()
+						if frame is not None:
+							writer.append_data(np.asarray(frame))
+							frames_written += 1
+
+				if frames_written < max_frames_per_episode:
+					frame = env.render()
+					if frame is not None:
+						writer.append_data(np.asarray(frame))
+						frames_written += 1
+
+				rewards.append(total_reward)
+		video_saved = True
+	except Exception as exc:
+		print(f"Final video export failed; continuing without video: {exc}")
+		avg_reward, rewards = evaluate_policy(env, model, schedule, action_dim, num_episodes)
+		return avg_reward, rewards, False
+
+	if rewards:
+		return float(np.mean(rewards)), rewards, video_saved
+
+	print("No frames captured; skipping video export.")
+	avg_reward, rewards = evaluate_policy(env, model, schedule, action_dim, num_episodes)
+	return avg_reward, rewards, False
+
+
 def evaluate_policy_and_save_gif(
 	env: gym.Env,
 	model: tf.keras.Model,
@@ -321,51 +424,44 @@ def evaluate_policy_and_save_gif(
 	num_episodes: int,
 	gif_path: str,
 	fps: int = 30,
+	frame_skip: int = 4,
+	max_frames_per_episode: int = 120,
 ) -> tuple[float, list[float], bool]:
-	"""
-	Evaluates the policy and records the first episode as a GIF.
-	Requires env to support rgb-array rendering.
-	"""
-	try:
-		import imageio.v2 as imageio
-	except ImportError:
-		print("imageio is not installed; skipping GIF export.")
-		avg_reward, rewards = evaluate_policy(env, model, schedule, action_dim, num_episodes)
-		return avg_reward, rewards, False
+	return _evaluate_policy_and_save_video(
+		env=env,
+		model=model,
+		schedule=schedule,
+		action_dim=action_dim,
+		num_episodes=num_episodes,
+		video_path=gif_path,
+		fps=fps,
+		frame_skip=frame_skip,
+		max_frames_per_episode=max_frames_per_episode,
+	)
 
-	rewards = []
-	frames = []
 
-	for ep in range(num_episodes):
-		state, _ = env.reset()
-		done = False
-		total_reward = 0.0
-
-		if ep == 0:
-			frame = env.render()
-			if frame is not None:
-				frames.append(frame)
-
-		while not done:
-			action = sample_action(model, schedule, state, action_dim)
-			state, reward, terminated, truncated, _ = env.step(action)
-			done = terminated or truncated
-			total_reward += float(reward)
-
-			if ep == 0:
-				frame = env.render()
-				if frame is not None:
-					frames.append(frame)
-
-		rewards.append(total_reward)
-
-	os.makedirs(os.path.dirname(gif_path), exist_ok=True)
-	if frames:
-		imageio.mimsave(gif_path, frames, fps=fps)
-		return float(np.mean(rewards)), rewards, True
-
-	print("No frames captured; skipping GIF export.")
-	return float(np.mean(rewards)), rewards, False
+def evaluate_policy_and_save_mp4_preview(
+	env: gym.Env,
+	model: tf.keras.Model,
+	schedule: DiffusionSchedule,
+	action_dim: int,
+	num_episodes: int,
+	video_path: str,
+	fps: int = 30,
+	frame_skip: int = 12,
+	max_frames_per_episode: int = 60,
+) -> tuple[float, list[float], bool]:
+	return _evaluate_policy_and_save_video(
+		env=env,
+		model=model,
+		schedule=schedule,
+		action_dim=action_dim,
+		num_episodes=num_episodes,
+		video_path=video_path,
+		fps=fps,
+		frame_skip=frame_skip,
+		max_frames_per_episode=max_frames_per_episode,
+	)
 
 
 def make_dataset(states: np.ndarray, actions: np.ndarray, batch_size: int, shuffle: bool) -> tf.data.Dataset:
@@ -510,6 +606,7 @@ def main() -> None:
 
 	print("\n--- Final Evaluation ---")
 	final_gif_path = os.path.join(os.path.dirname(__file__), cfg.final_gif_name)
+	final_preview_path = os.path.join(os.path.dirname(__file__), cfg.wandb_preview_name)
 	final_eval_env = gym.make(cfg.env_name, render_mode="rgb_array")
 	final_avg_reward, final_rewards, gif_saved = evaluate_policy_and_save_gif(
 		env=final_eval_env,
@@ -519,6 +616,8 @@ def main() -> None:
 		num_episodes=cfg.final_eval_episodes,
 		gif_path=final_gif_path,
 		fps=cfg.final_gif_fps,
+		frame_skip=cfg.final_gif_frame_skip,
+		max_frames_per_episode=cfg.final_gif_max_frames_per_episode,
 	)
 	final_eval_env.close()
 	for i, r in enumerate(final_rewards, start=1):
@@ -530,8 +629,27 @@ def main() -> None:
 		print("Final evaluation GIF was not saved.")
 
 	wandb.log({"final_eval_avg_reward": final_avg_reward})
-	if gif_saved:
-		wandb.log({"final_eval_rollout_gif": wandb.Video(final_gif_path, format="gif")})
+	if gif_saved and cfg.wandb_log_final_preview:
+		try:
+			preview_env = gym.make(cfg.env_name, render_mode="rgb_array")
+			_, _, preview_saved = evaluate_policy_and_save_mp4_preview(
+				env=preview_env,
+				model=model,
+				schedule=schedule,
+				action_dim=action_dim,
+				num_episodes=cfg.wandb_preview_episodes,
+				video_path=final_preview_path,
+				fps=cfg.final_gif_fps,
+				frame_skip=cfg.wandb_preview_frame_skip,
+				max_frames_per_episode=cfg.wandb_preview_max_frames_per_episode,
+			)
+			preview_env.close()
+			if preview_saved:
+				wandb.log({"final_eval_rollout_preview": wandb.Video(final_preview_path, format="mp4")})
+			else:
+				print("W&B MP4 preview was not saved; keeping local GIF only.")
+		except Exception as exc:
+			print(f"W&B MP4 preview upload failed; keeping local GIF only: {exc}")
 	wandb.finish()
 	env.close()
 

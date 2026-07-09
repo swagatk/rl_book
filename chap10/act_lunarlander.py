@@ -1,5 +1,7 @@
 import os
 import random
+from dataclasses import dataclass
+from typing import Any, cast
 import numpy as np
 import tensorflow as tf
 from collections import deque
@@ -8,6 +10,57 @@ import wandb
 
 # Force TensorFlow to run smoothly on CPUs/GPUs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+
+@dataclass
+class Config:
+    env_name: str = "LunarLanderContinuous-v3"
+    seed: int = 42
+
+    # Hardware
+    gpu_memory_limit_mb: int | None = None
+
+    # Expert data
+    expert_episodes: int = 200
+
+    # Model
+    chunk_size: int = 20
+    latent_dim: int = 16
+    num_layers: int = 3
+    d_model: int = 256
+    num_heads: int = 4
+    dff: int = 512
+    eff: int = 256
+
+    # Optimization
+    learning_rate: float = 1e-4
+    epochs: int = 200
+    batch_size: int = 64
+    kl_beta: float = 0.001
+
+    # Evaluation
+    train_eval_episodes: int = 2
+    final_eval_episodes: int = 5
+    temporal_ensemble_weight: float = 0.01
+    final_gif_frame_skip: int = 1
+    final_gif_max_frames_per_episode: int = 1000
+    wandb_preview_episodes: int = 1
+    wandb_preview_frame_skip: int = 12
+    wandb_preview_max_frames_per_episode: int = 120
+    final_gif_name: str = "act_lunarlander_final_eval.gif"
+    wandb_preview_name: str = "act_lunarlander_preview.mp4"
+    final_gif_fps: int = 30
+
+    # W&B
+    wandb_project: str = "act-lunarlander"
+    wandb_run_name: str = "act-training-run"
+    wandb_log_final_preview: bool = True
+
+
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
 def limit_gpu_memory(memory_limit_mb: int) -> None:
     gpus = tf.config.list_physical_devices('GPU')
@@ -268,12 +321,16 @@ def create_training_data(expert_dataset, chunk_size):
 # 4. TRAINING AND EVALUATION PIPELINE
 # ==============================================================================
 
-def evaluate_model(env, model, chunk_size, action_dim, num_episodes=1):
+def evaluate_model(env, model, chunk_size, action_dim, num_episodes=1, temporal_weight=0.01):
     """Evaluates the model and returns a list of episodic rewards."""
     eval_rewards = []
     for _ in range(num_episodes):
         obs, _ = env.reset()
-        ensembler = TemporalEnsembler(chunk_size=chunk_size, action_dim=action_dim, exponential_weight=0.01)
+        ensembler = TemporalEnsembler(
+            chunk_size=chunk_size,
+            action_dim=action_dim,
+            exponential_weight=temporal_weight,
+        )
         total_reward = 0.0
         done = False
         while not done:
@@ -288,94 +345,227 @@ def evaluate_model(env, model, chunk_size, action_dim, num_episodes=1):
     return eval_rewards
 
 
-def evaluate_model_and_save_gif(env, model, chunk_size, action_dim, num_episodes, gif_path, fps=30):
-    """Evaluates the model, records all frames across episodes, and saves a single GIF."""
+def _evaluate_model_and_save_video(
+    env,
+    model,
+    chunk_size,
+    action_dim,
+    num_episodes,
+    video_path,
+    fps=30,
+    frame_skip=1,
+    max_frames_per_episode=1000,
+    temporal_weight=0.01,
+):
+    """Evaluates the model and streams a subsampled rollout into a single video file."""
     try:
         import imageio.v2 as imageio
     except ImportError:
-        print("imageio is not installed; skipping final evaluation GIF export.")
+        print("imageio is not installed; skipping video export.")
         return evaluate_model(env, model, chunk_size, action_dim, num_episodes), False
 
+    video_dir = os.path.dirname(video_path)
+    if video_dir:
+        os.makedirs(video_dir, exist_ok=True)
+
+    frame_skip = max(1, int(frame_skip))
+    max_frames_per_episode = max(1, int(max_frames_per_episode))
     eval_rewards = []
-    frames = []
+    video_saved = False
 
-    for _ in range(num_episodes):
-        obs, _ = env.reset()
-        ensembler = TemporalEnsembler(chunk_size=chunk_size, action_dim=action_dim, exponential_weight=0.01)
-        total_reward = 0.0
-        done = False
+    try:
+        kwargs: dict[str, Any] = {"mode": "I", "fps": fps}
+        if video_path.lower().endswith(".mp4"):
+            kwargs.update({"codec": "libx264", "quality": 6, "macro_block_size": None})
+        elif video_path.lower().endswith(".gif"):
+            kwargs.update({"loop": 0})
 
-        frame = env.render()
-        if frame is not None:
-            frames.append(frame)
+        writer = cast(
+            Any,
+            imageio.get_writer(
+                video_path,
+                **kwargs,
+            ),
+        )
+        with writer:
+            for _ in range(num_episodes):
+                obs, _ = env.reset()
+                ensembler = TemporalEnsembler(
+                    chunk_size=chunk_size,
+                    action_dim=action_dim,
+                    exponential_weight=temporal_weight,
+                )
+                total_reward = 0.0
+                done = False
+                step_index = 0
+                frames_written = 0
 
-        while not done:
-            state_in = tf.convert_to_tensor(obs[None, :], dtype=tf.float32)
-            predicted_chunk = model(state_in, training=False)
-            predicted_chunk_np = predicted_chunk[0].numpy()
-            smoothed_action = ensembler.update_and_get_action(predicted_chunk_np)
-            obs, reward, terminated, truncated, _ = env.step(smoothed_action)
-            done = terminated or truncated
-            total_reward += reward
+                frame = env.render()
+                if frame is not None:
+                    writer.append_data(np.asarray(frame))
+                    frames_written += 1
 
-            frame = env.render()
-            if frame is not None:
-                frames.append(frame)
+                while not done:
+                    state_in = tf.convert_to_tensor(obs[None, :], dtype=tf.float32)
+                    predicted_chunk = model(state_in, training=False)
+                    predicted_chunk_np = predicted_chunk[0].numpy()
+                    smoothed_action = ensembler.update_and_get_action(predicted_chunk_np)
+                    obs, reward, terminated, truncated, _ = env.step(smoothed_action)
+                    done = terminated or truncated
+                    total_reward += reward
+                    step_index += 1
 
-        eval_rewards.append(total_reward)
+                    if (
+                        frames_written < max_frames_per_episode
+                        and step_index % frame_skip == 0
+                    ):
+                        frame = env.render()
+                        if frame is not None:
+                            writer.append_data(np.asarray(frame))
+                            frames_written += 1
 
-    if frames:
-        gif_dir = os.path.dirname(gif_path)
-        if gif_dir:
-            os.makedirs(gif_dir, exist_ok=True)
-        imageio.mimsave(gif_path, frames, fps=fps)
-        return eval_rewards, True
+                if frames_written < max_frames_per_episode:
+                    frame = env.render()
+                    if frame is not None:
+                        writer.append_data(np.asarray(frame))
+                        frames_written += 1
 
-    print("No frames were captured during final evaluation; skipping GIF export.")
-    return eval_rewards, False
+                eval_rewards.append(total_reward)
+        video_saved = True
+    except Exception as exc:
+        print(f"Final video export failed; continuing without video: {exc}")
+        return evaluate_model(env, model, chunk_size, action_dim, num_episodes), False
+
+    if eval_rewards:
+        return eval_rewards, video_saved
+
+    print("No frames were captured during final evaluation; skipping video export.")
+    return evaluate_model(env, model, chunk_size, action_dim, num_episodes), False
+
+
+def evaluate_model_and_save_gif(
+    env,
+    model,
+    chunk_size,
+    action_dim,
+    num_episodes,
+    gif_path,
+    fps=30,
+    frame_skip=1,
+    max_frames_per_episode=1000,
+    temporal_weight=0.01,
+):
+    return _evaluate_model_and_save_video(
+        env=env,
+        model=model,
+        chunk_size=chunk_size,
+        action_dim=action_dim,
+        num_episodes=num_episodes,
+        video_path=gif_path,
+        fps=fps,
+        frame_skip=frame_skip,
+        max_frames_per_episode=max_frames_per_episode,
+        temporal_weight=temporal_weight,
+    )
+
+
+def evaluate_model_and_save_mp4_preview(
+    env,
+    model,
+    chunk_size,
+    action_dim,
+    num_episodes,
+    video_path,
+    fps=30,
+    frame_skip=12,
+    max_frames_per_episode=60,
+    temporal_weight=0.01,
+):
+    return _evaluate_model_and_save_video(
+        env=env,
+        model=model,
+        chunk_size=chunk_size,
+        action_dim=action_dim,
+        num_episodes=num_episodes,
+        video_path=video_path,
+        fps=fps,
+        frame_skip=frame_skip,
+        max_frames_per_episode=max_frames_per_episode,
+        temporal_weight=temporal_weight,
+    )
 
 def main():
-    # Limit GPU memory to 6 GB
-    #limit_gpu_memory(6144)
+    cfg = Config()
+    set_seed(cfg.seed)
+    if cfg.gpu_memory_limit_mb is not None:
+        limit_gpu_memory(cfg.gpu_memory_limit_mb)
 
     # Setup Gymnasium Environment
-    env_name = "LunarLanderContinuous-v3"
+    env_name = cfg.env_name
     env = gym.make(env_name)
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
-    chunk_size = 20 # Slices of 20 steps (planning horizon)
+    chunk_size = cfg.chunk_size  # Slices of 20 steps (planning horizon)
 
     # 1. Collect demonstration dataset
-    expert_data, avg_expert_reward = collect_demonstrations(env, num_episodes=200)
+    expert_data, avg_expert_reward = collect_demonstrations(env, num_episodes=cfg.expert_episodes)
 
     # 2. Slice expert data into chunks
     train_states, train_chunks = create_training_data(expert_data, chunk_size)
     print(f"Dataset generated. States shape: {train_states.shape}, Chunks shape: {train_chunks.shape}")
 
     # 3. Instantiate the ACT Agent
-    model = ActionChunkingTransformer(state_dim=state_dim, action_dim=action_dim, chunk_size=chunk_size)
-    optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
+    model = ActionChunkingTransformer(
+        state_dim=state_dim,
+        action_dim=action_dim,
+        latent_dim=cfg.latent_dim,
+        chunk_size=chunk_size,
+        num_layers=cfg.num_layers,
+        d_model=cfg.d_model,
+        num_heads=cfg.num_heads,
+        dff=cfg.dff,
+        eff=cfg.eff,
+    )
+    optimizer = tf.keras.optimizers.Adam(learning_rate=cfg.learning_rate)
 
     # 4. Train using standard TF Custom Training Loop (combining Reconstruction & KL penalties)
-    epochs = 200
-    batch_size = 64
-    beta = 0.001 # KL Divergence scale factor
+    epochs = cfg.epochs
+    batch_size = cfg.batch_size
+    beta = cfg.kl_beta  # KL Divergence scale factor
 
     # Initialize Weights & Biases
     wandb.init(
-        project="act-lunarlander",
-        name="act-training-run",
+        project=cfg.wandb_project,
+        name=cfg.wandb_run_name,
         config={
+            "env": env_name,
+            "seed": cfg.seed,
+            "expert_episodes": cfg.expert_episodes,
             "chunk_size": chunk_size,
+            "latent_dim": cfg.latent_dim,
+            "num_layers": cfg.num_layers,
+            "d_model": cfg.d_model,
+            "num_heads": cfg.num_heads,
+            "dff": cfg.dff,
+            "eff": cfg.eff,
             "epochs": epochs,
             "batch_size": batch_size,
             "kl_beta": beta,
+            "learning_rate": cfg.learning_rate,
+            "temporal_ensemble_weight": cfg.temporal_ensemble_weight,
+            "train_eval_episodes": cfg.train_eval_episodes,
+            "final_eval_episodes": cfg.final_eval_episodes,
             "expert_avg_reward": avg_expert_reward,
         }
     )
 
-    dataset = tf.data.Dataset.from_tensor_slices((train_states, train_chunks)).shuffle(10000).batch(batch_size)
+    dataset = (
+        tf.data.Dataset.from_tensor_slices((train_states, train_chunks))
+        .shuffle(10000)
+        .batch(batch_size)
+        .prefetch(tf.data.AUTOTUNE)
+    )
 
     print("\n--- Starting ACT Training Loop ---")
     historical_rewards = []
@@ -411,7 +601,14 @@ def main():
         training_loss = avg_recon + (beta * avg_kl)
         
         # Evaluate current policy to track episodic rewards
-        eval_rewards = evaluate_model(env, model, chunk_size, action_dim, num_episodes=2)
+        eval_rewards = evaluate_model(
+            env,
+            model,
+            chunk_size,
+            action_dim,
+            num_episodes=cfg.train_eval_episodes,
+            temporal_weight=cfg.temporal_ensemble_weight,
+        )
         historical_rewards.extend(eval_rewards)
         
         avg_episodic_reward = np.mean(eval_rewards)
@@ -431,9 +628,10 @@ def main():
 
     # 5. Live Online Evaluation using Temporal Ensembling
     print("\n--- Evaluating Trained ACT Model with Temporal Ensembling ---")
-    eval_episodes = 5
+    eval_episodes = cfg.final_eval_episodes
     final_eval_env = gym.make(env_name, render_mode="rgb_array")
-    final_gif_path = os.path.join(os.path.dirname(__file__), "act_lunarlander_final_eval.gif")
+    final_gif_path = os.path.join(os.path.dirname(__file__), cfg.final_gif_name)
+    final_preview_path = os.path.join(os.path.dirname(__file__), cfg.wandb_preview_name)
     final_eval_rewards, gif_saved = evaluate_model_and_save_gif(
         final_eval_env,
         model,
@@ -441,7 +639,10 @@ def main():
         action_dim,
         num_episodes=eval_episodes,
         gif_path=final_gif_path,
-        fps=30,
+        fps=cfg.final_gif_fps,
+        frame_skip=cfg.final_gif_frame_skip,
+        max_frames_per_episode=cfg.final_gif_max_frames_per_episode,
+        temporal_weight=cfg.temporal_ensemble_weight,
     )
     final_eval_env.close()
     
@@ -453,6 +654,30 @@ def main():
         print(f"Saved final evaluation GIF to: {final_gif_path}")
     else:
         print("Final evaluation GIF was not saved.")
+
+    wandb.log({"final_eval_avg_reward": float(np.mean(final_eval_rewards))})
+    if gif_saved and cfg.wandb_log_final_preview:
+        try:
+            preview_env = gym.make(env_name, render_mode="rgb_array")
+            _, preview_saved = evaluate_model_and_save_mp4_preview(
+                preview_env,
+                model,
+                chunk_size,
+                action_dim,
+                num_episodes=cfg.wandb_preview_episodes,
+                video_path=final_preview_path,
+                fps=cfg.final_gif_fps,
+                frame_skip=cfg.wandb_preview_frame_skip,
+                max_frames_per_episode=cfg.wandb_preview_max_frames_per_episode,
+                temporal_weight=cfg.temporal_ensemble_weight,
+            )
+            preview_env.close()
+            if preview_saved:
+                wandb.log({"final_eval_rollout_preview": wandb.Video(final_preview_path, format="mp4")})
+            else:
+                print("W&B MP4 preview was not saved; keeping local GIF only.")
+        except Exception as exc:
+            print(f"W&B MP4 preview upload failed; keeping local GIF only: {exc}")
     env.close()
     wandb.finish()
 
